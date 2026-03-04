@@ -26,11 +26,9 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Data (user uploads)
-packages/server/data/avatars/
-packages/server/data/assets/
-packages/server/data/*.db
-data/backgrounds/
+# Data (user uploads & runtime data — all user content)
+data/
+packages/server/data/
 
 # Logs
 *.log
