@@ -24,6 +24,7 @@ export function ImportPresetModal({ open, onClose }: Props) {
     try {
       const text = await file.text();
       const json = JSON.parse(text);
+      json.__filename = file.name.replace(/\.json$/i, "");
 
       const res = await fetch("/api/import/st-preset", {
         method: "POST",

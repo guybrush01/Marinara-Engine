@@ -1238,8 +1238,8 @@ function ImportButton({
       if (effectiveMode === "json") {
         const text = await file.text();
         const json = JSON.parse(text);
-        // Pass filename as fallback name for lorebook imports
-        if (endpoint.includes("lorebook")) {
+        // Pass filename as fallback name for lorebook/preset imports
+        if (endpoint.includes("lorebook") || endpoint.includes("preset")) {
           json.__filename = file.name.replace(/\.json$/i, "");
         }
         res = await fetch(`/api${endpoint}`, {

@@ -106,6 +106,9 @@ export async function importSTPreset(raw: Record<string, unknown>, db: DB, fileN
   // Detect XML wrapper bracket pairs and create groups for them
   const groupIdMap = await detectAndCreateGroups(sortedPrompts, created.id, storage);
 
+  // Track identifier → created section ID for reordering
+  const createdSectionIds: string[] = [];
+
   for (const entry of sortedPrompts) {
     // Skip bracket entries that are just XML open/close tags (now handled by groups)
     const isBracket = /^[┌└┎┖⌈⌊⌜⌞]/.test(entry.name);
@@ -126,7 +129,7 @@ export async function importSTPreset(raw: Record<string, unknown>, db: DB, fileN
     // Assign to group if the entry was between bracket markers
     const groupId = groupIdMap.get(entry.identifier) ?? null;
 
-    await storage.createSection({
+    const section = await storage.createSection({
       presetId: created.id,
       identifier: entry.identifier,
       name: entry.name,
@@ -141,7 +144,14 @@ export async function importSTPreset(raw: Record<string, unknown>, db: DB, fileN
       markerConfig: entry.marker ? { type: entry.identifier as any } : null,
       forbidOverrides: entry.forbid_overrides ?? false,
     });
+    if (section) createdSectionIds.push(section.id);
     sectionsCreated++;
+  }
+
+  // Explicitly set the section order and injection orders to match prompt_order.
+  // This ensures correct ordering regardless of createSection append behavior.
+  if (createdSectionIds.length > 0) {
+    await storage.reorderSections(created.id, createdSectionIds);
   }
 
   return {
@@ -218,10 +228,17 @@ async function detectAndCreateGroups(
 
 function guessPresetName(raw: Record<string, unknown>, fileName?: string): string {
   if (typeof raw.name === "string" && raw.name.trim()) return raw.name;
-  // Try to find a Read-Me prompt with a name
+  // Try to find a Read-Me prompt with a name embedded in a comment
   const prompts = (raw.prompts ?? []) as STPromptEntry[];
   const readme = prompts.find((p) => p.name?.includes("Read-Me") || p.name?.includes("README"));
   if (readme?.content) {
+    // Match {{// PresetName ... }} comment on first line
+    const commentMatch = readme.content.match(/\{\{\/\/\s*([^(\n{]+)/);
+    if (commentMatch) {
+      const name = commentMatch[1]!.replace(/[,!]+\s*$/, "").trim();
+      if (name.length > 2) return name;
+    }
+    // Fallback: match "name:" or "title:" or "preset:" patterns
     const nameMatch = readme.content.match(/(?:name|title|preset)[:\s]+["']?([^"'\n]+)/i);
     if (nameMatch) return nameMatch[1]!.trim();
   }

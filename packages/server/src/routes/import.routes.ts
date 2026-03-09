@@ -235,7 +235,9 @@ export async function importRoutes(app: FastifyInstance) {
 
   /** Import a SillyTavern prompt preset (JSON body). */
   app.post("/st-preset", async (req) => {
-    return importSTPreset(req.body as Record<string, unknown>, app.db);
+    const body = req.body as Record<string, unknown>;
+    const fileName = typeof body.__filename === "string" ? body.__filename : undefined;
+    return importSTPreset(body, app.db, fileName);
   });
 
   /** Import a SillyTavern World Info / lorebook (JSON body). */
