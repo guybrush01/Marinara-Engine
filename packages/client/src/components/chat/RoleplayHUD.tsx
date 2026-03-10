@@ -80,12 +80,15 @@ export function RoleplayHUD({ chatId, characterCount, layout = "top" }: Roleplay
   // Debounced API patch — batches rapid field changes into a single call
   const patchQueueRef = useRef<Record<string, unknown>>({});
   const patchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gameStateRef = useRef(gameState);
+  gameStateRef.current = gameState;
 
   const patchField = useCallback(
     (field: string, value: unknown) => {
       // Optimistic local update
-      if (gameState) {
-        setGameState({ ...gameState, [field]: value });
+      const prev = gameStateRef.current;
+      if (prev) {
+        setGameState({ ...prev, [field]: value });
       } else {
         setGameState({
           id: "",
@@ -109,17 +112,17 @@ export function RoleplayHUD({ chatId, characterCount, layout = "top" }: Roleplay
       patchQueueRef.current[field] = value;
       if (patchTimerRef.current) clearTimeout(patchTimerRef.current);
       patchTimerRef.current = setTimeout(() => {
-        const payload = { ...patchQueueRef.current };
+        const payload = { ...patchQueueRef.current, manual: true };
         patchQueueRef.current = {};
         api.patch(`/chats/${chatId}/game-state`, payload).catch(() => {});
       }, 500);
     },
-    [chatId, gameState, setGameState],
+    [chatId, setGameState],
   );
 
   const patchPlayerStats = useCallback(
     (field: string, value: unknown) => {
-      const current = gameState?.playerStats ?? {
+      const current = gameStateRef.current?.playerStats ?? {
         stats: [],
         attributes: null,
         skills: {},
@@ -130,7 +133,7 @@ export function RoleplayHUD({ chatId, characterCount, layout = "top" }: Roleplay
       const next = { ...current, [field]: value };
       patchField("playerStats", next);
     },
-    [gameState, patchField],
+    [patchField],
   );
 
   const clearGameState = useCallback(() => {
@@ -152,8 +155,9 @@ export function RoleplayHUD({ chatId, characterCount, layout = "top" }: Roleplay
       },
       personaStats: [],
     };
-    if (gameState) {
-      setGameState({ ...gameState, ...cleared } as GameState);
+    const prev = gameStateRef.current;
+    if (prev) {
+      setGameState({ ...prev, ...cleared } as GameState);
     } else {
       setGameState({
         id: "",
@@ -165,7 +169,7 @@ export function RoleplayHUD({ chatId, characterCount, layout = "top" }: Roleplay
       } as GameState);
     }
     api.patch(`/chats/${chatId}/game-state`, cleared).catch(() => {});
-  }, [chatId, gameState, setGameState]);
+  }, [chatId, setGameState]);
 
   const date = gameState?.date ?? null;
   const time = gameState?.time ?? null;
@@ -207,7 +211,9 @@ export function RoleplayHUD({ chatId, characterCount, layout = "top" }: Roleplay
       )}
 
       {/* Mobile: combined Tracker widget */}
-      {(enabledAgentTypes.has("persona-stats") || enabledAgentTypes.has("character-tracker") || enabledAgentTypes.has("quest")) && (
+      {(enabledAgentTypes.has("persona-stats") ||
+        enabledAgentTypes.has("character-tracker") ||
+        enabledAgentTypes.has("quest")) && (
         <div className="md:hidden">
           <CombinedPlayerWidget
             layout={layout}
@@ -234,7 +240,11 @@ export function RoleplayHUD({ chatId, characterCount, layout = "top" }: Roleplay
       {/* Desktop: separate widgets */}
       {enabledAgentTypes.has("persona-stats") && (
         <div className="hidden md:block">
-          <PersonaStatsWidget bars={personaStatBars} onUpdate={(bars) => patchField("personaStats", bars)} layout={layout} />
+          <PersonaStatsWidget
+            bars={personaStatBars}
+            onUpdate={(bars) => patchField("personaStats", bars)}
+            layout={layout}
+          />
         </div>
       )}
       {enabledAgentTypes.has("character-tracker") && (
@@ -253,7 +263,11 @@ export function RoleplayHUD({ chatId, characterCount, layout = "top" }: Roleplay
       )}
       {enabledAgentTypes.has("persona-stats") && (
         <div className="hidden md:block">
-          <InventoryWidget items={inventory} onUpdate={(items) => patchPlayerStats("inventory", items)} layout={layout} />
+          <InventoryWidget
+            items={inventory}
+            onUpdate={(items) => patchPlayerStats("inventory", items)}
+            layout={layout}
+          />
         </div>
       )}
       {enabledAgentTypes.has("quest") && (
@@ -292,11 +306,44 @@ function ActionsGroup({
   enabledAgentTypes,
   clearGameState,
 }: ActionsGroupProps) {
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  // Position with fixed layout to avoid overflow clipping
+  useLayoutEffect(() => {
+    if (!agentsOpen || !btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    const maxH = 256; // max-h-64 = 16rem = 256px
+    const top = rect.bottom + 4 + maxH > window.innerHeight ? rect.top - maxH - 4 : rect.bottom + 4;
+    const left = Math.min(rect.left, window.innerWidth - 288 - 8); // w-72 = 288px
+    setPos({ top, left });
+  }, [agentsOpen]);
+
+  // Close on outside click or Escape
+  useEffect(() => {
+    if (!agentsOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (btnRef.current?.contains(e.target as Node) || dropdownRef.current?.contains(e.target as Node)) return;
+      setAgentsOpen(false);
+    };
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAgentsOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("keydown", keyHandler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("keydown", keyHandler);
+    };
+  }, [agentsOpen, setAgentsOpen]);
+
   return (
     <div className={cn("flex gap-1.5", isVertical ? "flex-col items-center" : "items-center max-md:flex-col")}>
       {/* Agents */}
       <div className="relative">
         <button
+          ref={btnRef}
           onClick={() => setAgentsOpen(!agentsOpen)}
           className={cn(
             "flex items-center gap-1 rounded-full bg-white/5 border border-white/10 px-2 py-1 text-[10px] text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white max-md:px-1.5 max-md:py-0.5 max-md:text-[9px]",
@@ -317,53 +364,60 @@ function ActionsGroup({
           {agentsOpen ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
         </button>
 
-        {agentsOpen && (
-          <div className="absolute right-0 top-full mt-1 w-72 max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-black/80 backdrop-blur-xl shadow-xl z-50 animate-message-in">
-            {isAgentProcessing && (
-              <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2">
-                <Sparkles size={12} className="text-purple-400 animate-pulse" />
-                <span className="text-[10px] text-purple-300/80">Agents thinking…</span>
-              </div>
-            )}
-            {thoughtBubbles.length === 0 && !isAgentProcessing && (
-              <div className="px-3 py-4 text-center text-[10px] text-white/30">No agent activity yet</div>
-            )}
-            {thoughtBubbles.length > 0 && (
-              <>
-                <div className="flex items-center justify-between border-b border-white/5 px-3 py-1.5">
-                  <span className="text-[10px] text-white/40">
-                    {thoughtBubbles.length} result{thoughtBubbles.length !== 1 ? "s" : ""}
-                  </span>
-                  <button
-                    onClick={clearThoughtBubbles}
-                    className="text-[10px] text-white/30 hover:text-white/60 transition-colors"
-                  >
-                    Clear all
-                  </button>
+        {agentsOpen &&
+          pos &&
+          createPortal(
+            <div
+              ref={dropdownRef}
+              className="fixed w-72 max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-black/80 backdrop-blur-xl shadow-xl z-[9999] animate-message-in"
+              style={{ top: pos.top, left: pos.left }}
+            >
+              {isAgentProcessing && (
+                <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2">
+                  <Sparkles size={12} className="text-purple-400 animate-pulse" />
+                  <span className="text-[10px] text-purple-300/80">Agents thinking…</span>
                 </div>
-                <div className="flex flex-col gap-1 p-2">
-                  {thoughtBubbles.map((bubble, i) => (
-                    <div
-                      key={`${bubble.agentId}-${bubble.timestamp}`}
-                      className="relative rounded-lg bg-white/5 p-2 text-[10px]"
+              )}
+              {thoughtBubbles.length === 0 && !isAgentProcessing && (
+                <div className="px-3 py-4 text-center text-[10px] text-white/30">No agent activity yet</div>
+              )}
+              {thoughtBubbles.length > 0 && (
+                <>
+                  <div className="flex items-center justify-between border-b border-white/5 px-3 py-1.5">
+                    <span className="text-[10px] text-white/40">
+                      {thoughtBubbles.length} result{thoughtBubbles.length !== 1 ? "s" : ""}
+                    </span>
+                    <button
+                      onClick={clearThoughtBubbles}
+                      className="text-[10px] text-white/30 hover:text-white/60 transition-colors"
                     >
-                      <button
-                        onClick={() => dismissThoughtBubble(i)}
-                        className="absolute right-1.5 top-1.5 text-white/20 hover:text-white/60 transition-colors"
+                      Clear all
+                    </button>
+                  </div>
+                  <div className="flex flex-col gap-1 p-2">
+                    {thoughtBubbles.map((bubble, i) => (
+                      <div
+                        key={`${bubble.agentId}-${bubble.timestamp}`}
+                        className="relative rounded-lg bg-white/5 p-2 text-[10px]"
                       >
-                        <X size={10} />
-                      </button>
-                      <div className="pr-4">
-                        <span className="font-semibold text-purple-300">{bubble.agentName}</span>
-                        <p className="mt-0.5 whitespace-pre-wrap text-white/50 leading-relaxed">{bubble.content}</p>
+                        <button
+                          onClick={() => dismissThoughtBubble(i)}
+                          className="absolute right-1.5 top-1.5 text-white/20 hover:text-white/60 transition-colors"
+                        >
+                          <X size={10} />
+                        </button>
+                        <div className="pr-4">
+                          <span className="font-semibold text-purple-300">{bubble.agentName}</span>
+                          <p className="mt-0.5 whitespace-pre-wrap text-white/50 leading-relaxed">{bubble.content}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>,
+            document.body,
+          )}
       </div>
 
       {enabledAgentTypes.has("echo-chamber") && <EchoChamberToggle />}
@@ -545,7 +599,9 @@ function CombinedPlayerWidget({
           {showPersona && (
             <div className="p-2">
               <div className="px-1 pb-1">
-                <span className="text-[10px] font-semibold text-violet-300/70 uppercase tracking-wider">Persona Stats</span>
+                <span className="text-[10px] font-semibold text-violet-300/70 uppercase tracking-wider">
+                  Persona Stats
+                </span>
               </div>
               <div className="space-y-2">
                 {personaStats.length === 0 && (
@@ -605,10 +661,26 @@ function CombinedPlayerWidget({
                       </button>
                     </div>
                     <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 pl-1">
-                      <LabeledEdit label="Mood" value={char.mood} onSave={(v) => updateCharacter(idx, { ...char, mood: v })} />
-                      <LabeledEdit label="Look" value={char.appearance ?? ""} onSave={(v) => updateCharacter(idx, { ...char, appearance: v || null })} />
-                      <LabeledEdit label="Outfit" value={char.outfit ?? ""} onSave={(v) => updateCharacter(idx, { ...char, outfit: v || null })} />
-                      <LabeledEdit label="Thinks" value={char.thoughts ?? ""} onSave={(v) => updateCharacter(idx, { ...char, thoughts: v || null })} />
+                      <LabeledEdit
+                        label="Mood"
+                        value={char.mood}
+                        onSave={(v) => updateCharacter(idx, { ...char, mood: v })}
+                      />
+                      <LabeledEdit
+                        label="Look"
+                        value={char.appearance ?? ""}
+                        onSave={(v) => updateCharacter(idx, { ...char, appearance: v || null })}
+                      />
+                      <LabeledEdit
+                        label="Outfit"
+                        value={char.outfit ?? ""}
+                        onSave={(v) => updateCharacter(idx, { ...char, outfit: v || null })}
+                      />
+                      <LabeledEdit
+                        label="Thinks"
+                        value={char.thoughts ?? ""}
+                        onSave={(v) => updateCharacter(idx, { ...char, thoughts: v || null })}
+                      />
                     </div>
                     {char.stats.length > 0 && (
                       <div className="space-y-1 pt-1 border-t border-white/5">
@@ -952,7 +1024,13 @@ function CharactersWidget({
         </span>
       </button>
 
-      <WidgetPopover open={open} onClose={() => setOpen(false)} anchorRef={buttonRef} placement={layout === "left" ? "right" : layout === "right" ? "left" : "bottom"} className="w-72 max-h-80 overflow-y-auto">
+      <WidgetPopover
+        open={open}
+        onClose={() => setOpen(false)}
+        anchorRef={buttonRef}
+        placement={layout === "left" ? "right" : layout === "right" ? "left" : "bottom"}
+        className="w-72 max-h-80 overflow-y-auto"
+      >
         <div className="flex items-center justify-between border-b border-white/5 px-3 py-1.5">
           <span className="text-[10px] font-semibold text-white/50 uppercase tracking-wider flex items-center gap-1">
             <Users size={10} /> Present Characters
@@ -1096,7 +1174,15 @@ function StatBarEditable({
 
 // ── Persona Stats Widget ─────────────────────
 
-function PersonaStatsWidget({ bars, onUpdate, layout = "top" }: { bars: CharacterStat[]; onUpdate: (bars: CharacterStat[]) => void; layout?: HudPosition }) {
+function PersonaStatsWidget({
+  bars,
+  onUpdate,
+  layout = "top",
+}: {
+  bars: CharacterStat[];
+  onUpdate: (bars: CharacterStat[]) => void;
+  layout?: HudPosition;
+}) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -1133,7 +1219,13 @@ function PersonaStatsWidget({ bars, onUpdate, layout = "top" }: { bars: Characte
         </span>
       </button>
 
-      <WidgetPopover open={open} onClose={() => setOpen(false)} anchorRef={buttonRef} placement={layout === "left" ? "right" : layout === "right" ? "left" : "bottom"} className="w-60 max-h-80 overflow-y-auto">
+      <WidgetPopover
+        open={open}
+        onClose={() => setOpen(false)}
+        anchorRef={buttonRef}
+        placement={layout === "left" ? "right" : layout === "right" ? "left" : "bottom"}
+        className="w-60 max-h-80 overflow-y-auto"
+      >
         <div className="border-b border-white/5 px-3 py-1.5">
           <span className="text-[10px] font-semibold text-white/50 uppercase tracking-wider">Persona Stats</span>
         </div>
@@ -1155,7 +1247,15 @@ function PersonaStatsWidget({ bars, onUpdate, layout = "top" }: { bars: Characte
 
 // ── Inventory Widget ─────────────────────────
 
-function InventoryWidget({ items, onUpdate, layout = "top" }: { items: InventoryItem[]; onUpdate: (items: InventoryItem[]) => void; layout?: HudPosition }) {
+function InventoryWidget({
+  items,
+  onUpdate,
+  layout = "top",
+}: {
+  items: InventoryItem[];
+  onUpdate: (items: InventoryItem[]) => void;
+  layout?: HudPosition;
+}) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -1192,7 +1292,13 @@ function InventoryWidget({ items, onUpdate, layout = "top" }: { items: Inventory
         </span>
       </button>
 
-      <WidgetPopover open={open} onClose={() => setOpen(false)} anchorRef={buttonRef} placement={layout === "left" ? "right" : layout === "right" ? "left" : "bottom"} className="w-64 max-h-80 overflow-y-auto">
+      <WidgetPopover
+        open={open}
+        onClose={() => setOpen(false)}
+        anchorRef={buttonRef}
+        placement={layout === "left" ? "right" : layout === "right" ? "left" : "bottom"}
+        className="w-64 max-h-80 overflow-y-auto"
+      >
         <div className="flex items-center justify-between border-b border-white/5 px-3 py-1.5">
           <span className="text-[10px] font-semibold text-white/50 uppercase tracking-wider flex items-center gap-1">
             <Package size={10} /> Inventory ({items.length})
@@ -1239,7 +1345,15 @@ function InventoryWidget({ items, onUpdate, layout = "top" }: { items: Inventory
 
 // ── Quests Widget ────────────────────────────
 
-function QuestsWidget({ quests, onUpdate, layout = "top" }: { quests: QuestProgress[]; onUpdate: (quests: QuestProgress[]) => void; layout?: HudPosition }) {
+function QuestsWidget({
+  quests,
+  onUpdate,
+  layout = "top",
+}: {
+  quests: QuestProgress[];
+  onUpdate: (quests: QuestProgress[]) => void;
+  layout?: HudPosition;
+}) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -1284,7 +1398,13 @@ function QuestsWidget({ quests, onUpdate, layout = "top" }: { quests: QuestProgr
         </span>
       </button>
 
-      <WidgetPopover open={open} onClose={() => setOpen(false)} anchorRef={buttonRef} placement={layout === "left" ? "right" : layout === "right" ? "left" : "bottom"} className="w-72 max-h-96 overflow-y-auto">
+      <WidgetPopover
+        open={open}
+        onClose={() => setOpen(false)}
+        anchorRef={buttonRef}
+        placement={layout === "left" ? "right" : layout === "right" ? "left" : "bottom"}
+        className="w-72 max-h-96 overflow-y-auto"
+      >
         <div className="flex items-center justify-between border-b border-white/5 px-3 py-1.5">
           <span className="text-[10px] font-semibold text-white/50 uppercase tracking-wider flex items-center gap-1">
             <Scroll size={10} /> Quests ({quests.length})
@@ -1461,7 +1581,17 @@ function useWidgetTap(onEdit: () => void) {
 }
 
 /** Truncated label with optional tooltip */
-function WidgetLabel({ value, fallback, showTip, className }: { value: string; fallback: string; showTip?: boolean; className?: string }) {
+function WidgetLabel({
+  value,
+  fallback,
+  showTip,
+  className,
+}: {
+  value: string;
+  fallback: string;
+  showTip?: boolean;
+  className?: string;
+}) {
   return (
     <span className={cn("relative w-full max-md:px-0.5", className)}>
       <span

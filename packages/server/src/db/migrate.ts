@@ -322,6 +322,11 @@ const COLUMN_MIGRATIONS: ColumnMigration[] = [
     column: "persona_stats",
     definition: "TEXT",
   },
+  {
+    table: "game_state_snapshots",
+    column: "manual_overrides",
+    definition: "TEXT",
+  },
 ];
 
 export async function runMigrations(db: DB) {
@@ -338,4 +343,12 @@ export async function runMigrations(db: DB) {
       await db.run(sql.raw(`ALTER TABLE ${migration.table} ADD COLUMN ${migration.column} ${migration.definition}`));
     }
   }
+
+  // 3. Create indexes if they don't exist
+  await db.run(
+    sql.raw(`CREATE INDEX IF NOT EXISTS idx_game_state_chat_id ON game_state_snapshots(chat_id, created_at DESC)`),
+  );
+  await db.run(
+    sql.raw(`CREATE INDEX IF NOT EXISTS idx_game_state_message ON game_state_snapshots(message_id, swipe_index)`),
+  );
 }

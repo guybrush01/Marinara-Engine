@@ -18,7 +18,12 @@ export interface SlashCommand {
 export interface SlashCommandContext {
   chatId: string;
   /** Trigger an LLM generation (with optional user message) */
-  generate: (params: { chatId: string; connectionId: string | null; userMessage?: string; impersonate?: boolean }) => Promise<void>;
+  generate: (params: {
+    chatId: string;
+    connectionId: string | null;
+    userMessage?: string;
+    impersonate?: boolean;
+  }) => Promise<void>;
   /** Insert a message directly into the chat (no LLM) */
   createMessage: (data: { role: string; content: string; characterId?: string | null }) => void;
   /** Invalidate chat queries to refresh the UI */

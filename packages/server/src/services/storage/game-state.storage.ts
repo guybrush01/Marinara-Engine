@@ -54,7 +54,7 @@ export function createGameStateStorage(db: DB) {
       await db.update(gameStateSnapshots).set({ committed: 1 }).where(eq(gameStateSnapshots.id, id));
     },
 
-    async create(state: Omit<GameState, "id" | "createdAt">) {
+    async create(state: Omit<GameState, "id" | "createdAt">, manualOverrides?: Record<string, string> | null) {
       const id = newId();
       await db.insert(gameStateSnapshots).values({
         id,
@@ -70,6 +70,7 @@ export function createGameStateStorage(db: DB) {
         recentEvents: JSON.stringify(state.recentEvents),
         playerStats: state.playerStats ? JSON.stringify(state.playerStats) : null,
         personaStats: state.personaStats ? JSON.stringify(state.personaStats) : null,
+        manualOverrides: manualOverrides ? JSON.stringify(manualOverrides) : null,
         createdAt: now(),
       });
       return id;
@@ -90,6 +91,8 @@ export function createGameStateStorage(db: DB) {
           | "personaStats"
         >
       >,
+      /** When true, the edited fields are also recorded as manual overrides. */
+      manual?: boolean,
     ) {
       const latest = await this.getLatest(chatId);
       if (!latest) return null;
@@ -105,6 +108,19 @@ export function createGameStateStorage(db: DB) {
       if (fields.personaStats !== undefined)
         updates.personaStats = fields.personaStats ? JSON.stringify(fields.personaStats) : null;
       if (Object.keys(updates).length === 0) return latest;
+
+      // Merge manual override tracking
+      if (manual) {
+        const TRACKABLE = ["date", "time", "location", "weather", "temperature"] as const;
+        const existing: Record<string, string> = latest.manualOverrides
+          ? JSON.parse(latest.manualOverrides as string)
+          : {};
+        for (const key of TRACKABLE) {
+          if (fields[key] !== undefined) existing[key] = fields[key] as string;
+        }
+        updates.manualOverrides = JSON.stringify(existing);
+      }
+
       await db.update(gameStateSnapshots).set(updates).where(eq(gameStateSnapshots.id, latest.id));
       return { ...latest, ...updates };
     },

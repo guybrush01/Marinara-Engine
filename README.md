@@ -18,15 +18,32 @@ Everything runs locally. No accounts, no cloud, no telemetry. Connect to any Ope
 - Character tags.
 - Peek Prompt now shows parameters sent to the model.
 - Images from the gallery can be displayed in the chat area.
+- `/impersonate` command with multimodal file attachments.
+- TLS/SSL support via `SSL_CERT` and `SSL_KEY` environment variables.
+- Manual edits to world state widgets now persist across AI generations.
+- Combined Tracker widget on mobile (Persona, Characters, Inventory, Quests).
+- Single-tap tooltips and double-tap editing for mobile world state widgets.
+- Direction-aware widget popover placement for left/right layouts.
 
 **Changes:**
 - The app is now fully browser-based with PWA support. No desktop wrapper needed. Should work on Termux.
+- HUD widgets are now compacted and bubble-styled for mobile.
+- Toolbar icons have transparent backgrounds with floating layout.
 
 **Fixes:**
 - Various agent fixes, especially to Spotify DJ one.
 - Reworked prompts for agents.
-- Installers fixed.
+- Installers fixed — Windows installer now preserves default path and enforces Node.js 20+.
 - Importing presets and chats now works correctly.
+- Agents dropdown no longer clipped by overflow containers in top view.
+- Peek Prompt no longer merges `<last_message>` with `<output_format>` sections.
+- Widget popovers no longer clipped by parent overflow.
+- Reflected XSS in Spotify OAuth callback fixed.
+- Heading dedup regex now matches any heading level with special characters.
+- Workbox URL pattern correctly matches API routes in service worker.
+- CSS import ordering for SillyTavern theme fixed.
+- React timer leak in Spotify agent polling fixed.
+- Sidebar border no longer shows when collapsed.
 - Various major and minor bug fixes.
 
 ---

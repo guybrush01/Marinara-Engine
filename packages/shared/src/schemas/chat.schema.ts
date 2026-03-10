@@ -31,10 +31,15 @@ export const generateRequestSchema = z.object({
   connectionId: z.string().nullable().default(null),
   debugMode: z.boolean().optional().default(false),
   impersonate: z.boolean().optional().default(false),
-  attachments: z.array(z.object({
-    type: z.string(),
-    data: z.string(),
-  })).optional().default([]),
+  attachments: z
+    .array(
+      z.object({
+        type: z.string(),
+        data: z.string(),
+      }),
+    )
+    .optional()
+    .default([]),
 });
 
 export type CreateChatInput = z.infer<typeof createChatSchema>;

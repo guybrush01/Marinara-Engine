@@ -178,11 +178,45 @@ function buildDisplaySections(messages: Array<{ role: string; content: string }>
 
     // ── Last message (separate from chat history) ──
     if (i === lastMsgIdx) {
-      let content = msg.content
-        .replace(/^<last_message>\n?/i, "")
-        .replace(/\n?<\/last_message>\s*$/i, "")
-        .replace(/^## Last Message\n?/i, "");
-      result.push({ kind: "section", label: "last_message", role: msg.role, content: content.trim() });
+      // The server may merge <last_message> with adjacent same-role sections
+      // (e.g. <output_format>) when strict role formatting is on.
+      // Split out the <last_message> portion and parse the rest normally.
+      const openIdx = msg.content.search(/<last_message>/i);
+      const closingIdx = msg.content.search(/<\/last_message>/i);
+      if (openIdx >= 0 && closingIdx >= 0) {
+        const beforeOpen = msg.content.slice(0, openIdx).trim();
+        const innerContent = msg.content.slice(msg.content.indexOf(">", openIdx) + 1, closingIdx).trim();
+        const afterClose = msg.content.slice(msg.content.indexOf(">", closingIdx) + 1).trim();
+
+        // Content before <last_message>
+        if (beforeOpen) {
+          const pre = parseXmlSections(beforeOpen, msg.role);
+          for (const b of pre) result.push(b);
+        }
+        // The last_message block itself
+        if (innerContent) {
+          result.push({
+            kind: "section",
+            label: "last_message",
+            role: msg.role,
+            content: innerContent,
+          });
+        }
+        // Content after </last_message> (e.g. <output_format>)
+        if (afterClose) {
+          const post = parseXmlSections(afterClose, msg.role);
+          for (const b of post) result.push(b);
+        }
+      } else {
+        // Markdown format or no tags — strip heading and show as-is
+        const content = msg.content.replace(/^## Last Message\n?/i, "");
+        result.push({
+          kind: "section",
+          label: "last_message",
+          role: msg.role,
+          content: content.trim(),
+        });
+      }
       continue;
     }
 

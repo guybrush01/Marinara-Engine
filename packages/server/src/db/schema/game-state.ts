@@ -25,6 +25,9 @@ export const gameStateSnapshots = sqliteTable("game_state_snapshots", {
   /** JSON array of persona stat bars */
   personaStats: text("persona_stats"),
 
+  /** JSON object of manually-edited fields — keys are field names, values are the user-set values. */
+  manualOverrides: text("manual_overrides"),
+
   /** Whether this snapshot has been "committed" (user sent a follow-up message). */
   committed: integer("committed").notNull().default(0),
 

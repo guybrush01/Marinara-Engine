@@ -33,6 +33,9 @@ export interface GameState {
   /** Whether this snapshot has been committed (user sent a follow-up message). */
   committed?: boolean;
 
+  /** JSON object of manually-edited field names → values. Carried forward across agent snapshots. */
+  manualOverrides?: Record<string, string> | null;
+
   createdAt: string;
 }
 

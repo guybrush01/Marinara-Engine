@@ -129,6 +129,7 @@ export async function chatsRoutes(app: FastifyInstance) {
       recentEvents: JSON.parse((row.recentEvents as string) ?? "[]"),
       playerStats: row.playerStats ? JSON.parse(row.playerStats as string) : null,
       personaStats: row.personaStats ? JSON.parse(row.personaStats as string) : null,
+      manualOverrides: row.manualOverrides ? JSON.parse(row.manualOverrides as string) : null,
       createdAt: row.createdAt,
     };
   });
@@ -137,7 +138,9 @@ export async function chatsRoutes(app: FastifyInstance) {
   app.patch<{ Params: { id: string } }>("/:id/game-state", async (req, reply) => {
     const { createGameStateStorage } = await import("../services/storage/game-state.storage.js");
     const gameStateStore = createGameStateStorage(app.db);
-    const fields = req.body as Partial<{
+    const body = req.body as Record<string, unknown>;
+    const manual = body.manual === true;
+    const fields = body as Partial<{
       date: string;
       time: string;
       location: string;
@@ -147,7 +150,7 @@ export async function chatsRoutes(app: FastifyInstance) {
       playerStats: any;
       personaStats: any[];
     }>;
-    const updated = await gameStateStore.updateLatest(req.params.id, fields);
+    const updated = await gameStateStore.updateLatest(req.params.id, fields, manual);
     if (!updated) return reply.status(404).send({ error: "No game state found" });
     return updated;
   });

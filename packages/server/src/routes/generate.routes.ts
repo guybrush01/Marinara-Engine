@@ -1384,22 +1384,48 @@ export async function generateRoutes(app: FastifyInstance) {
                 const refreshed = await chats.getMessage(messageId);
                 if (refreshed) gsSwipeIndex = refreshed.activeSwipeIndex ?? 0;
               }
-              await gameStateStore.create({
-                chatId: input.chatId,
-                messageId,
-                swipeIndex: gsSwipeIndex,
-                date: (gs.date as string) ?? null,
-                time: (gs.time as string) ?? null,
-                location: (gs.location as string) ?? null,
-                weather: (gs.weather as string) ?? null,
-                temperature: (gs.temperature as string) ?? null,
-                presentCharacters: (gs.presentCharacters as any[]) ?? [],
-                recentEvents: (gs.recentEvents as string[]) ?? [],
-                playerStats: null,
-                personaStats: (gs.personaStats as any[]) ?? null,
-              });
+
+              // ── Preserve manual overrides from previous snapshot ──
+              const prevSnap = await gameStateStore.getLatest(input.chatId);
+              let manualOverrides: Record<string, string> | null = null;
+              if (prevSnap?.manualOverrides) {
+                manualOverrides = JSON.parse(prevSnap.manualOverrides as string);
+              }
+
+              // Build the new snapshot, letting manual overrides win
+              const newDate = manualOverrides?.date ?? (gs.date as string) ?? null;
+              const newTime = manualOverrides?.time ?? (gs.time as string) ?? null;
+              const newLocation = manualOverrides?.location ?? (gs.location as string) ?? null;
+              const newWeather = manualOverrides?.weather ?? (gs.weather as string) ?? null;
+              const newTemperature = manualOverrides?.temperature ?? (gs.temperature as string) ?? null;
+
+              await gameStateStore.create(
+                {
+                  chatId: input.chatId,
+                  messageId,
+                  swipeIndex: gsSwipeIndex,
+                  date: newDate,
+                  time: newTime,
+                  location: newLocation,
+                  weather: newWeather,
+                  temperature: newTemperature,
+                  presentCharacters: (gs.presentCharacters as any[]) ?? [],
+                  recentEvents: (gs.recentEvents as string[]) ?? [],
+                  playerStats: null,
+                  personaStats: (gs.personaStats as any[]) ?? null,
+                },
+                manualOverrides,
+              );
               // Send game state to client so HUD updates live
-              reply.raw.write(`data: ${JSON.stringify({ type: "game_state", data: gs })}\n\n`);
+              const mergedGs = {
+                ...gs,
+                date: newDate,
+                time: newTime,
+                location: newLocation,
+                weather: newWeather,
+                temperature: newTemperature,
+              };
+              reply.raw.write(`data: ${JSON.stringify({ type: "game_state", data: mergedGs })}\n\n`);
             } catch {
               // Non-critical
             }
