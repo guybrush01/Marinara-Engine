@@ -4,7 +4,7 @@
 import type { GenerationParameters } from "../types/prompt.js";
 
 /** App version — single source of truth. */
-export const APP_VERSION = "1.3.2";
+export const APP_VERSION = "1.3.3";
 
 /** Default generation parameters for new presets. */
 export const DEFAULT_GENERATION_PARAMS: GenerationParameters = {

@@ -4,8 +4,9 @@
 import type { FastifyInstance } from "fastify";
 import { existsSync, mkdirSync } from "fs";
 import { join, extname } from "path";
+import { DATA_DIR } from "../utils/data-dir.js";
 
-const AVATAR_DIR = join(process.cwd(), "data", "avatars");
+const AVATAR_DIR = join(DATA_DIR, "avatars");
 
 function ensureDir() {
   if (!existsSync(AVATAR_DIR)) {

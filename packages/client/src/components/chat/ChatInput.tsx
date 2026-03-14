@@ -250,15 +250,10 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
   const isRP = mode === "roleplay";
 
   return (
-    <div className={cn("chat-input-container", isRP ? "p-3" : "border-t p-3 glass-strong border-[var(--border)]")}>
+    <div className="chat-input-container p-3">
       {/* Slash command autocomplete popup */}
       {completions.length > 0 && (
-        <div
-          className={cn(
-            "mb-2 overflow-hidden rounded-xl border shadow-xl",
-            isRP ? "border-white/10 bg-black/80 backdrop-blur-xl" : "border-[var(--border)] bg-[var(--background)]",
-          )}
-        >
+        <div className="mb-2 overflow-hidden rounded-xl border border-white/10 bg-black/80 shadow-xl backdrop-blur-xl">
           {completions.map((cmd, i) => (
             <button
               key={cmd.name}
@@ -273,18 +268,10 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
               }}
               className={cn(
                 "flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors",
-                i === selectedCompletion
-                  ? isRP
-                    ? "bg-white/10 text-white"
-                    : "bg-[var(--accent)] text-[var(--foreground)]"
-                  : isRP
-                    ? "text-white/70 hover:bg-white/5"
-                    : "text-[var(--muted-foreground)] hover:bg-[var(--accent)]/50",
+                i === selectedCompletion ? "bg-white/10 text-white" : "text-white/70 hover:bg-white/5",
               )}
             >
-              <span className={cn("font-mono font-semibold", isRP ? "text-blue-400" : "text-[var(--primary)]")}>
-                /{cmd.name}
-              </span>
+              <span className="font-mono font-semibold text-blue-400">/{cmd.name}</span>
               <span className="text-xs opacity-60">{cmd.description}</span>
             </button>
           ))}
@@ -293,12 +280,7 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
 
       {/* Feedback toast */}
       {feedback && (
-        <div
-          className={cn(
-            "mb-2 flex items-start gap-2 rounded-lg px-3 py-2 text-xs",
-            isRP ? "bg-amber-500/15 text-amber-300" : "bg-amber-100 text-amber-800",
-          )}
-        >
+        <div className={cn("mb-2 flex items-start gap-2 rounded-lg px-3 py-2 text-xs bg-amber-500/15 text-amber-300")}>
           <span className="flex-1 whitespace-pre-wrap">{feedback}</span>
           <button
             onClick={() => setFeedback(null)}
@@ -316,10 +298,7 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
           {attachments.map((att, i) => (
             <div
               key={i}
-              className={cn(
-                "group relative flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs",
-                isRP ? "bg-white/10 text-white/70" : "bg-[var(--accent)] text-[var(--foreground)]",
-              )}
+              className="group relative flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs text-white/70"
             >
               {att.type.startsWith("image/") ? (
                 <img src={att.data} alt={att.name} className="h-8 w-8 rounded object-cover" />
@@ -340,17 +319,8 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
       <div
         className={cn(
           "relative flex items-center gap-2 rounded-2xl border-2 px-4 py-2.5 transition-all duration-200",
-          isRP
-            ? cn(
-                "bg-black/40",
-                hasInput || attachments.length ? "border-blue-400/30 shadow-md shadow-blue-500/5" : "border-white/25",
-              )
-            : cn(
-                "bg-[var(--secondary)]",
-                hasInput || attachments.length
-                  ? "border-[var(--primary)]/40 shadow-md shadow-[var(--primary)]/5"
-                  : "border-[var(--border)]/40",
-              ),
+          "bg-black/40",
+          hasInput || attachments.length ? "border-blue-400/30 shadow-md shadow-blue-500/5" : "border-white/25",
         )}
       >
         {/* Attachment button */}
@@ -367,17 +337,9 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
           disabled={!activeChatId}
           className={cn(
             "rounded-lg p-1.5 transition-all active:scale-90",
-            isRP
-              ? cn(
-                  attachments.length
-                    ? "text-blue-400 hover:bg-white/10"
-                    : "text-white/40 hover:bg-white/10 hover:text-white/70",
-                )
-              : cn(
-                  attachments.length
-                    ? "text-[var(--primary)] hover:bg-[var(--accent)]"
-                    : "text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]",
-                ),
+            attachments.length
+              ? "text-blue-400 hover:bg-white/10"
+              : "text-white/40 hover:bg-white/10 hover:text-white/70",
           )}
           title="Attach files"
         >
@@ -400,12 +362,7 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
           rows={1}
           spellCheck
           autoCorrect="on"
-          className={cn(
-            "max-h-[200px] flex-1 resize-none bg-transparent py-0 text-sm leading-normal outline-none disabled:cursor-not-allowed disabled:opacity-40",
-            isRP
-              ? "text-white/90 placeholder:text-white/30"
-              : "text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]",
-          )}
+          className="max-h-[200px] flex-1 resize-none bg-transparent py-0 text-sm leading-normal text-white/90 placeholder:text-white/30 outline-none disabled:cursor-not-allowed disabled:opacity-40"
         />
 
         {/* Send / Stop button */}
@@ -417,12 +374,8 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
             isStreaming
               ? "bg-[var(--destructive)] text-white hover:opacity-80"
               : (hasInput || attachments.length || canRetry) && activeChatId
-                ? isRP
-                  ? "text-white hover:text-white/80 active:scale-90"
-                  : "text-[var(--foreground)] hover:text-[var(--foreground)]/80 active:scale-90"
-                : isRP
-                  ? "text-white/20"
-                  : "text-[var(--muted-foreground)]",
+                ? "text-white hover:text-white/80 active:scale-90"
+                : "text-white/20",
           )}
         >
           {isStreaming ? <StopCircle size={16} /> : <Send size={15} className={cn(hasInput && "translate-x-[1px]")} />}
@@ -431,12 +384,7 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
 
       {/* Streaming indicator */}
       {isStreaming && (
-        <div
-          className={cn(
-            "mt-1.5 flex items-center justify-end px-3 text-[10px]",
-            isRP ? "text-blue-400" : "text-[var(--primary)]",
-          )}
-        >
+        <div className={cn("mt-1.5 flex items-center justify-end px-3 text-[10px]", "text-blue-400")}>
           <span className="flex items-center gap-1">
             <Loader2 size={9} className="animate-spin" />
             Generating...

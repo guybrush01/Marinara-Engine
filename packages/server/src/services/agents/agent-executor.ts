@@ -56,7 +56,17 @@ export async function executeAgent(
 
     // If tools are available, use the tool call loop
     if (toolContext && toolContext.tools.length > 0) {
-      return executeAgentWithTools(config, messages, provider, model, temperature, maxTokens, toolContext, startTime);
+      return executeAgentWithTools(
+        config,
+        messages,
+        provider,
+        model,
+        temperature,
+        maxTokens,
+        toolContext,
+        startTime,
+        context.signal,
+      );
     }
 
     // Call LLM (non-streaming, no tools)
@@ -64,6 +74,7 @@ export async function executeAgent(
       model,
       temperature,
       maxTokens,
+      signal: context.signal,
     });
 
     const responseText = result.content?.trim() ?? "";
@@ -100,6 +111,7 @@ async function executeAgentWithTools(
   maxTokens: number,
   toolContext: AgentToolContext,
   startTime: number,
+  signal?: AbortSignal,
 ): Promise<AgentResult> {
   const MAX_TOOL_ROUNDS = 5;
   const loopMessages = [...initialMessages];
@@ -111,6 +123,7 @@ async function executeAgentWithTools(
       temperature,
       maxTokens,
       tools: toolContext.tools,
+      signal,
     });
 
     totalTokens += result.usage?.totalTokens ?? 0;
@@ -150,7 +163,7 @@ async function executeAgentWithTools(
   }
 
   // Exhausted tool rounds — make one final call without tools to get JSON response
-  const finalResult = await provider.chatComplete(loopMessages, { model, temperature, maxTokens });
+  const finalResult = await provider.chatComplete(loopMessages, { model, temperature, maxTokens, signal });
   totalTokens += finalResult.usage?.totalTokens ?? 0;
   const responseText = finalResult.content?.trim() ?? "";
   const parsed = parseAgentResponse(config.type, responseText);
@@ -209,6 +222,7 @@ export async function executeAgentBatch(
       model,
       temperature,
       maxTokens: Math.min(maxTokensPerAgent * configs.length, 16384),
+      signal: context.signal,
     });
 
     const responseText = result.content?.trim() ?? "";

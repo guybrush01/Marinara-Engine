@@ -1,4 +1,9 @@
 import { defineConfig } from "drizzle-kit";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const dataDir = process.env.DATA_DIR ?? resolve(__dirname, "data");
 
 export default defineConfig({
   schema: [
@@ -16,6 +21,6 @@ export default defineConfig({
   out: "./src/db/migrations",
   dialect: "sqlite",
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? "file:./data/marinara-engine.db",
+    url: process.env.DATABASE_URL ?? `file:${resolve(dataDir, "marinara-engine.db")}`,
   },
 });

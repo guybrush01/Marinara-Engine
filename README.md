@@ -1,6 +1,6 @@
 # 🍝 Marinara Engine
 
-### Release 1.3.2
+### Release 1.3.3
 
 <h3 align="center"><b>Fun. Intuitive. Plug-And-Play.</b></h3>
 
@@ -65,6 +65,29 @@ Everything runs locally. No accounts, no cloud, no telemetry. Connect to any Ope
 ---
 
 ## Changelog
+
+### v1.3.3
+
+**Added:**
+- **Unified Chat UI** — Conversation and Roleplay modes now share the same visual layout. Background layers, toolbar, HUD sidebars, sprites, and weather effects are available in both modes.
+- **Per-Chat Agents** — Toggle individual agents on or off per chat, overriding global agent settings.
+- **Chat Setup Wizard** — New guided setup flow when creating a chat, letting you pick characters, presets, and connections in one step.
+- **Gallery Persistence** — Gallery images are now saved to disk and persist across server restarts.
+- **Reorderable Chat Settings** — Chat settings panels can be reordered via drag-and-drop.
+- **Toggle Contrast Mode** — New high-contrast UI toggle for improved readability.
+
+**Changes:**
+- Cancel generation now aborts **all** in-flight work — pre-generation agents, the main LLM response, and post-generation agents are all stopped immediately via abort signal propagation.
+
+**Fixes:**
+- Fixed conversation input box being wider than roleplay mode (padding now unconditional).
+- Fixed Termux startup failing due to ABI mismatch in better-sqlite3 prebuilt binaries.
+- Fixed Character Maker button not working correctly.
+- Fixed connection name truncation in settings panel.
+- Fixed agents panel text alignment issues.
+- Fixed per-chat function picker not displaying correctly.
+- Fixed agent toggle removal not persisting.
+- Fixed tab/browser refresh causing stale UI state.
 
 ### v1.3.2
 
@@ -157,7 +180,7 @@ All agents are disabled by default — enable only the ones you want. You can al
 ## Installation
 
 ## Windows EASIEST METHOD
-Download **[Marinara-Engine-Installer-1.3.2.exe](https://github.com/SpicyMarinara/Marinara-Engine/releases/download/v1.3.2/Marinara-Engine-Installer-1.3.2.exe)** from the [Releases](https://github.com/SpicyMarinara/Marinara-Engine/releases) page and run it. The installer checks for Node.js and Git, clones the repo, installs dependencies, builds the app, and creates a desktop shortcut.
+Download **[Marinara-Engine-Installer-1.3.3.exe](https://github.com/SpicyMarinara/Marinara-Engine/releases/download/v1.3.3/Marinara-Engine-Installer-1.3.3.exe)** from the [Releases](https://github.com/SpicyMarinara/Marinara-Engine/releases) page and run it. The installer checks for Node.js and Git, clones the repo, installs dependencies, builds the app, and creates a desktop shortcut.
 
 ---
 

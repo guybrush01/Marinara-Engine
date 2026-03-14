@@ -24,6 +24,7 @@ import { ChatInput } from "./ChatInput";
 import { ChatSettingsDrawer } from "./ChatSettingsDrawer";
 import { ChatFilesDrawer } from "./ChatFilesDrawer";
 import { ChatGalleryDrawer } from "./ChatGalleryDrawer";
+import { ChatSetupWizard } from "./ChatSetupWizard";
 import { PeekPromptModal } from "./PeekPromptModal";
 import { RoleplayHUD } from "./RoleplayHUD";
 import { WeatherEffects } from "./WeatherEffects";
@@ -46,7 +47,6 @@ import {
   FlipHorizontal2,
   HelpCircle,
   RefreshCw,
-  Sparkles,
   MoreHorizontal,
 } from "lucide-react";
 import { useUIStore } from "../../stores/ui.store";
@@ -137,6 +137,7 @@ export function ChatArea() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const { data: chat } = useChat(activeChatId);
   const {
@@ -162,6 +163,7 @@ export function ChatArea() {
   const agentProcessing = useAgentStore((s) => s.isProcessing);
 
   const setShouldOpenSettings = useChatStore((s) => s.setShouldOpenSettings);
+  const setShouldOpenWizard = useChatStore((s) => s.setShouldOpenWizard);
 
   const handleQuickStart = useCallback(
     (mode: "conversation" | "roleplay") => {
@@ -172,11 +174,12 @@ export function ChatArea() {
           onSuccess: (chat) => {
             setActiveChatId(chat.id);
             setShouldOpenSettings(true);
+            setShouldOpenWizard(true);
           },
         },
       );
     },
-    [createChat, setActiveChatId, setShouldOpenSettings],
+    [createChat, setActiveChatId, setShouldOpenSettings, setShouldOpenWizard],
   );
 
   // Build character lookup map
@@ -283,17 +286,24 @@ export function ChatArea() {
     updateMeta.mutate({ id: chat.id, spritePosition: newSide });
   }, [chat?.id, spritePosition, updateMeta]);
 
-  // Set of enabled agent type IDs (respects both global enableAgents toggle and per-agent config)
+  // Set of enabled agent type IDs (respects both global enableAgents toggle and per-chat agent list)
   const enabledAgentTypes = useMemo(() => {
     const set = new Set<string>();
     if (!chatMeta.enableAgents) return set;
-    if (agentConfigs) {
-      for (const a of agentConfigs as AgentConfigRow[]) {
-        if (a.enabled === "true") set.add(a.type);
+    const activeAgentIds: string[] = Array.isArray(chatMeta.activeAgentIds) ? chatMeta.activeAgentIds : [];
+    if (activeAgentIds.length > 0) {
+      // Per-chat agent list: only these agents are active
+      for (const id of activeAgentIds) set.add(id);
+    } else {
+      // Fallback: use all globally enabled agents
+      if (agentConfigs) {
+        for (const a of agentConfigs as AgentConfigRow[]) {
+          if (a.enabled === "true") set.add(a.type);
+        }
       }
     }
     return set;
-  }, [chatMeta.enableAgents, agentConfigs]);
+  }, [chatMeta.enableAgents, chatMeta.activeAgentIds, agentConfigs]);
 
   const combatAgentEnabled = enabledAgentTypes.has("combat");
   const expressionAgentEnabled = enabledAgentTypes.has("expression");
@@ -409,12 +419,18 @@ export function ChatArea() {
 
   // Auto-open settings drawer for newly created chats
   const shouldOpenSettings = useChatStore((s) => s.shouldOpenSettings);
+  const shouldOpenWizard = useChatStore((s) => s.shouldOpenWizard);
   useEffect(() => {
     if (shouldOpenSettings && activeChatId) {
-      setSettingsOpen(true);
+      if (shouldOpenWizard) {
+        setWizardOpen(true);
+        useChatStore.getState().setShouldOpenWizard(false);
+      } else {
+        setSettingsOpen(true);
+      }
       setShouldOpenSettings(false);
     }
-  }, [shouldOpenSettings, activeChatId, setShouldOpenSettings]);
+  }, [shouldOpenSettings, shouldOpenWizard, activeChatId, setShouldOpenSettings]);
 
   // Auto-scroll on new messages / streaming (but not on "load more")
   // Only scroll if user is already near the bottom (within 150px)
@@ -594,245 +610,202 @@ export function ChatArea() {
   };
 
   // ═══════════════════════════════════════════════
-  // Roleplay Mode — immersive dark atmosphere
+  // Unified layout — mode-aware rendering
   // ═══════════════════════════════════════════════
-  if (isRoleplay) {
-    const msgPayload = (messages ?? []).map((m) => ({ role: m.role, characterId: m.characterId, content: m.content }));
-    return (
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sprite sidebar — left (only if expression agent enabled) */}
-        {expressionAgentEnabled && spritePosition === "left" && spriteCharacterIds.length > 0 && (
-          <SpriteSidebar
-            characterIds={spriteCharacterIds}
+  const msgPayload = (messages ?? []).map((m) => ({ role: m.role, characterId: m.characterId, content: m.content }));
+
+  return (
+    <div className="flex flex-1 overflow-hidden">
+      {/* Sprite sidebar — left (only if expression agent enabled) */}
+      {expressionAgentEnabled && spritePosition === "left" && spriteCharacterIds.length > 0 && (
+        <SpriteSidebar
+          characterIds={spriteCharacterIds}
+          messages={msgPayload}
+          characterMap={characterMap}
+          isRoleplay={isRoleplay}
+        />
+      )}
+
+      <div className="relative flex flex-1 flex-col overflow-hidden rpg-chat-area">
+        {/* ── Background layers ── */}
+        <CrossfadeBackground url={chatBackground} />
+        <div className="absolute inset-0 rpg-overlay" />
+        <div className="absolute inset-0 rpg-vignette pointer-events-none" />
+        {weatherEffects && <WeatherEffectsConnected />}
+        {expressionAgentEnabled && (
+          <SpriteOverlay
+            characterIds={chatCharIds}
             messages={msgPayload}
-            characterMap={characterMap}
-            isRoleplay
+            side={spritePosition}
+            spriteExpressions={spriteExpressions}
+            onExpressionChange={handleExpressionChange}
           />
         )}
-        <div className="rpg-chat-area relative flex flex-1 flex-col overflow-hidden">
-          {/* Background layer */}
-          <CrossfadeBackground url={chatBackground} />
-          {/* Dark atmospheric overlay */}
-          <div className="absolute inset-0 rpg-overlay" />
-          {/* Vignette effect */}
-          <div className="absolute inset-0 rpg-vignette pointer-events-none" />
 
-          {/* Dynamic weather effects — reads from game state store */}
-          {weatherEffects && <WeatherEffectsConnected />}
-
-          {/* VN-style character sprites (only if expression agent enabled) */}
-          {expressionAgentEnabled && (
-            <SpriteOverlay
-              characterIds={chatCharIds}
-              messages={msgPayload}
-              side={spritePosition}
-              spriteExpressions={spriteExpressions}
-              onExpressionChange={handleExpressionChange}
-            />
-          )}
-
-          <div className="flex flex-1 overflow-hidden">
-            {/* Combined toolbar + HUD — vertical sidebar on left */}
-            {hudPosition === "left" && chat && chatMeta.enableAgents && (
-              <div className="relative z-40 flex flex-col items-center gap-1.5 overflow-y-auto px-1.5 py-2 max-md:hidden">
-                <div className="flex flex-col items-center gap-1">
-                  <SummaryButton chatId={chat?.id ?? null} summary={chatMeta.summary ?? null} />
-                  <button
-                    onClick={() => setFilesOpen(true)}
-                    className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                    title="Manage Chat Files"
-                  >
-                    <FolderOpen size={14} />
-                  </button>
-                  {expressionAgentEnabled && chatCharIds.length > 0 && (
-                    <button
-                      onClick={handleToggleSpritePosition}
-                      className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                      title={`Sprite: ${spritePosition} side (click to flip)`}
-                    >
-                      <FlipHorizontal2 size={14} />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setGalleryOpen(true)}
-                    className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                    title="Gallery"
-                  >
-                    <Image size={14} />
-                  </button>
-                  <button
-                    onClick={() => setSettingsOpen(true)}
-                    className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                    title="Chat Settings"
-                  >
-                    <Settings2 size={14} />
-                  </button>
-                </div>
-                <div className="w-8 border-t border-white/10" />
-                <RoleplayHUD
-                  chatId={chat.id}
-                  characterCount={chatCharIds.length}
-                  layout="left"
-                  onRetriggerTrackers={handleRerunTrackers}
+        {/* ── Outer flex for left/right HUD sidebars ── */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left HUD sidebar */}
+          {hudPosition === "left" && chat && chatMeta.enableAgents && (
+            <div className="relative z-40 flex flex-col items-center gap-1.5 overflow-y-auto px-1.5 py-2 max-md:hidden">
+              <div className="flex flex-col items-center gap-1">
+                <SummaryButton chatId={chat?.id ?? null} summary={chatMeta.summary ?? null} />
+                <RpToolbarButton
+                  icon={<FolderOpen size={14} />}
+                  title="Manage Chat Files"
+                  onClick={() => setFilesOpen(true)}
+                />
+                {expressionAgentEnabled && chatCharIds.length > 0 && (
+                  <RpToolbarButton
+                    icon={<FlipHorizontal2 size={14} />}
+                    title={`Sprite: ${spritePosition} side (click to flip)`}
+                    onClick={handleToggleSpritePosition}
+                  />
+                )}
+                <RpToolbarButton icon={<Image size={14} />} title="Gallery" onClick={() => setGalleryOpen(true)} />
+                <RpToolbarButton
+                  icon={<Settings2 size={14} />}
+                  title="Chat Settings"
+                  onClick={() => setSettingsOpen(true)}
                 />
               </div>
-            )}
+              <div className="w-8 border-t border-white/10" />
+              <RoleplayHUD
+                chatId={chat.id}
+                characterCount={chatCharIds.length}
+                layout="left"
+                onRetriggerTrackers={handleRerunTrackers}
+              />
+            </div>
+          )}
 
-            <div className="flex flex-1 flex-col overflow-hidden">
-              {/* Combined toolbar + HUD — horizontal bar on top */}
-              {hudPosition === "top" ? (
-                <div className="pointer-events-none relative z-40 flex items-center px-4 py-2">
+          <div className="flex flex-1 flex-col overflow-hidden">
+            {/* ── Header / Toolbar area ── */}
+            {hudPosition === "top" ? (
+              <div className="pointer-events-none relative z-40 flex items-center px-4 py-2">
+                {chat && chatMeta.enableAgents && (
+                  <div className="pointer-events-auto flex-1 overflow-x-auto">
+                    <RoleplayHUD
+                      chatId={chat.id}
+                      characterCount={chatCharIds.length}
+                      layout="top"
+                      onRetriggerTrackers={handleRerunTrackers}
+                    />
+                  </div>
+                )}
+                <div className="pointer-events-auto flex shrink-0 items-center gap-1.5 ml-auto">
+                  <ToolbarMenu>
+                    <SummaryButton chatId={chat?.id ?? null} summary={chatMeta.summary ?? null} />
+                    <RpToolbarButton
+                      icon={<FolderOpen size={14} />}
+                      title="Manage Chat Files"
+                      onClick={() => setFilesOpen(true)}
+                    />
+                    {expressionAgentEnabled && chatCharIds.length > 0 && (
+                      <RpToolbarButton
+                        icon={<FlipHorizontal2 size={14} />}
+                        title={`Sprite: ${spritePosition} side`}
+                        onClick={handleToggleSpritePosition}
+                      />
+                    )}
+                    <RpToolbarButton icon={<Image size={14} />} title="Gallery" onClick={() => setGalleryOpen(true)} />
+                    <RpToolbarButton
+                      icon={<Settings2 size={14} />}
+                      title="Chat Settings"
+                      onClick={() => setSettingsOpen(true)}
+                    />
+                  </ToolbarMenu>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Mobile fallback — top bar for left/right modes */}
+                <div className="pointer-events-auto relative z-40 flex flex-col w-full md:hidden">
                   {chat && chatMeta.enableAgents && (
-                    <div className="pointer-events-auto flex-1 overflow-x-auto">
+                    <div className="flex w-full items-center gap-1.5 px-2 pt-2 pb-1">
                       <RoleplayHUD
                         chatId={chat.id}
                         characterCount={chatCharIds.length}
                         layout="top"
                         onRetriggerTrackers={handleRerunTrackers}
+                        mobileCompact
                       />
-                    </div>
-                  )}
-                  <div className="pointer-events-auto flex shrink-0 items-center gap-1.5 ml-auto">
-                    <ToolbarMenu>
-                      <SummaryButton chatId={chat?.id ?? null} summary={chatMeta.summary ?? null} />
-                      <button
-                        onClick={() => setFilesOpen(true)}
-                        className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                        title="Manage Chat Files"
-                      >
-                        <FolderOpen size={14} />
-                      </button>
-                      {expressionAgentEnabled && chatCharIds.length > 0 && (
-                        <button
-                          onClick={handleToggleSpritePosition}
-                          className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                          title={`Sprite: ${spritePosition} side (click to flip)`}
-                        >
-                          <FlipHorizontal2 size={14} />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => setGalleryOpen(true)}
-                        className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                        title="Gallery"
-                      >
-                        <Image size={14} />
-                      </button>
-                      <button
-                        onClick={() => setSettingsOpen(true)}
-                        className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                        title="Chat Settings"
-                      >
-                        <Settings2 size={14} />
-                      </button>
-                    </ToolbarMenu>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* Mobile fallback — top bar for left/right modes */}
-                  <div className="pointer-events-auto relative z-40 flex flex-col w-full md:hidden">
-                    {/* HUD widgets and action bar in a single row, with narrower widgets and no scroll */}
-                    {chat && chatMeta.enableAgents && (
-                      <div className="flex w-full items-center gap-1.5 px-2 pt-2 pb-1">
-                        <RoleplayHUD
-                          chatId={chat.id}
-                          characterCount={chatCharIds.length}
-                          layout="top"
-                          onRetriggerTrackers={handleRerunTrackers}
-                          mobileCompact
+                      <ToolbarMenu>
+                        <SummaryButton chatId={chat?.id ?? null} summary={chatMeta.summary ?? null} />
+                        <RpToolbarButton
+                          icon={<FolderOpen size={14} />}
+                          title="Manage Chat Files"
+                          onClick={() => setFilesOpen(true)}
+                          size="sm"
                         />
-                        <ToolbarMenu>
-                          <SummaryButton chatId={chat?.id ?? null} summary={chatMeta.summary ?? null} />
-                          <button
-                            onClick={() => setFilesOpen(true)}
-                            className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                            title="Manage Chat Files"
-                          >
-                            <FolderOpen size={14} />
-                          </button>
-                          {expressionAgentEnabled && chatCharIds.length > 0 && (
-                            <button
-                              onClick={handleToggleSpritePosition}
-                              className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                              title={`Sprite: ${spritePosition} side (click to flip)`}
-                            >
-                              <FlipHorizontal2 size={14} />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => setGalleryOpen(true)}
-                            className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                            title="Gallery"
-                          >
-                            <Image size={14} />
-                          </button>
-                          <button
-                            onClick={() => setSettingsOpen(true)}
-                            className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                            title="Chat Settings"
-                          >
-                            <Settings2 size={14} />
-                          </button>
-                        </ToolbarMenu>
-                      </div>
-                    )}
-                  </div>
-                  {/* Desktop fallback toolbar when agents disabled in left/right mode */}
-                  {!chatMeta.enableAgents && (
-                    <div className="pointer-events-none relative z-40 hidden items-center justify-end px-4 py-2 md:flex">
-                      <div className="pointer-events-auto">
-                        <ToolbarMenu>
-                          <SummaryButton chatId={chat?.id ?? null} summary={chatMeta.summary ?? null} />
-                          <button
-                            onClick={() => setFilesOpen(true)}
-                            className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                            title="Manage Chat Files"
-                          >
-                            <FolderOpen size={14} />
-                          </button>
-                          {expressionAgentEnabled && chatCharIds.length > 0 && (
-                            <button
-                              onClick={handleToggleSpritePosition}
-                              className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                              title={`Sprite: ${spritePosition} side (click to flip)`}
-                            >
-                              <FlipHorizontal2 size={14} />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => setGalleryOpen(true)}
-                            className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                            title="Gallery"
-                          >
-                            <Image size={14} />
-                          </button>
-                          <button
-                            onClick={() => setSettingsOpen(true)}
-                            className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                            title="Chat Settings"
-                          >
-                            <Settings2 size={14} />
-                          </button>
-                        </ToolbarMenu>
-                      </div>
+                        {expressionAgentEnabled && chatCharIds.length > 0 && (
+                          <RpToolbarButton
+                            icon={<FlipHorizontal2 size={14} />}
+                            title={`Sprite: ${spritePosition} side`}
+                            onClick={handleToggleSpritePosition}
+                            size="sm"
+                          />
+                        )}
+                        <RpToolbarButton
+                          icon={<Image size={14} />}
+                          title="Gallery"
+                          onClick={() => setGalleryOpen(true)}
+                          size="sm"
+                        />
+                        <RpToolbarButton
+                          icon={<Settings2 size={14} />}
+                          title="Chat Settings"
+                          onClick={() => setSettingsOpen(true)}
+                          size="sm"
+                        />
+                      </ToolbarMenu>
                     </div>
                   )}
-                </>
-              )}
+                </div>
+                {/* Desktop fallback toolbar when agents disabled */}
+                {!chatMeta.enableAgents && (
+                  <div className="pointer-events-none relative z-40 hidden items-center justify-end px-4 py-2 md:flex">
+                    <div className="pointer-events-auto">
+                      <ToolbarMenu>
+                        <SummaryButton chatId={chat?.id ?? null} summary={chatMeta.summary ?? null} />
+                        <RpToolbarButton
+                          icon={<FolderOpen size={14} />}
+                          title="Manage Chat Files"
+                          onClick={() => setFilesOpen(true)}
+                        />
+                        {expressionAgentEnabled && chatCharIds.length > 0 && (
+                          <RpToolbarButton
+                            icon={<FlipHorizontal2 size={14} />}
+                            title={`Sprite: ${spritePosition} side`}
+                            onClick={handleToggleSpritePosition}
+                          />
+                        )}
+                        <RpToolbarButton
+                          icon={<Image size={14} />}
+                          title="Gallery"
+                          onClick={() => setGalleryOpen(true)}
+                        />
+                        <RpToolbarButton
+                          icon={<Settings2 size={14} />}
+                          title="Chat Settings"
+                          onClick={() => setSettingsOpen(true)}
+                        />
+                      </ToolbarMenu>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
 
-              {/* Combat Encounter Modal */}
-              {encounterActive && <EncounterModal />}
+            {/* Combat Encounter Modal */}
+            {encounterActive && <EncounterModal />}
 
-              {/* Messages scroll area */}
+            {/* ── Messages scroll area ── */}
+            <div className={cn("relative flex-1 overflow-hidden z-10")}>
               <div
                 ref={scrollRef}
-                className={cn(
-                  "rpg-chat-messages-mobile relative z-10 flex-1 overflow-y-auto pt-4 pb-1",
-                  chatCharIds.length > 0 ? "px-[15%]" : "px-3",
-                )}
+                className="h-full overflow-y-auto pt-4 pb-1 rpg-chat-messages-mobile relative px-[15%] max-md:px-3"
               >
-                {/* Load More button */}
+                {/* Load More */}
                 {hasNextPage && (
                   <div className="mb-3 flex justify-center">
                     <button
@@ -880,7 +853,7 @@ export function ChatArea() {
                   );
                 })}
 
-                {/* Streaming / typing indicator (new message only, not regeneration) */}
+                {/* Streaming indicator */}
                 {isStreaming && !regenerateMessageId && (
                   <div className="animate-message-in">
                     <ChatMessage
@@ -907,346 +880,90 @@ export function ChatArea() {
 
                 <div ref={messagesEndRef} />
               </div>
-
-              {/* Input area */}
-              <div className="relative z-20">
-                <div className={cn("relative", chatCharIds.length > 0 && "px-[12%] max-md:px-3")}>
-                  {combatAgentEnabled && (
-                    <div className="flex justify-center py-1">
-                      <button
-                        onClick={() => startEncounter()}
-                        className="flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs text-white/50 transition-all hover:bg-white/10 hover:text-orange-300"
-                        title="Start Combat Encounter"
-                      >
-                        <Swords size={14} />
-                        <span>Encounter</span>
-                      </button>
-                    </div>
-                  )}
-                  <ChatInput mode="roleplay" characterNames={characterNames} />
-                </div>
-              </div>
-
-              {/* Settings drawer */}
-              {chat && <ChatSettingsDrawer chat={chat} open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
-              {/* Chat files drawer */}
-              {chat && <ChatFilesDrawer chat={chat} open={filesOpen} onClose={() => setFilesOpen(false)} />}
-              {/* Gallery drawer */}
-              {chat && <ChatGalleryDrawer chat={chat} open={galleryOpen} onClose={() => setGalleryOpen(false)} />}
             </div>
-            {/* end inner flex-col */}
 
-            {/* Combined toolbar + HUD — vertical sidebar on right */}
-            {hudPosition === "right" && chat && chatMeta.enableAgents && (
-              <div className="relative z-40 flex flex-col items-center gap-1.5 overflow-y-auto px-1.5 py-2 max-md:hidden">
-                <div className="flex flex-col items-center gap-1">
-                  <SummaryButton chatId={chat?.id ?? null} summary={chatMeta.summary ?? null} />
-                  <button
-                    onClick={() => setFilesOpen(true)}
-                    className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                    title="Manage Chat Files"
-                  >
-                    <FolderOpen size={14} />
-                  </button>
-                  {expressionAgentEnabled && chatCharIds.length > 0 && (
+            {/* ── Input area ── */}
+            <div className="relative z-20">
+              <div className="relative px-[12%] max-md:px-3">
+                {combatAgentEnabled && (
+                  <div className="flex justify-center py-1">
                     <button
-                      onClick={handleToggleSpritePosition}
-                      className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                      title={`Sprite: ${spritePosition} side (click to flip)`}
+                      onClick={() => startEncounter()}
+                      className="flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs text-white/50 transition-all hover:bg-white/10 hover:text-orange-300"
+                      title="Start Combat Encounter"
                     >
-                      <FlipHorizontal2 size={14} />
+                      <Swords size={14} />
+                      <span>Encounter</span>
                     </button>
-                  )}
-                  <button
-                    onClick={() => setGalleryOpen(true)}
-                    className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                    title="Gallery"
-                  >
-                    <Image size={14} />
-                  </button>
-                  <button
-                    onClick={() => setSettingsOpen(true)}
-                    className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                    title="Chat Settings"
-                  >
-                    <Settings2 size={14} />
-                  </button>
-                </div>
-                <div className="w-8 border-t border-white/10" />
-                <RoleplayHUD
-                  chatId={chat.id}
-                  characterCount={chatCharIds.length}
-                  layout="right"
-                  onRetriggerTrackers={handleRerunTrackers}
-                />
+                  </div>
+                )}
+                <ChatInput mode={isRoleplay ? "roleplay" : "conversation"} characterNames={characterNames} />
               </div>
+            </div>
+
+            {/* Drawers */}
+            {chat && <ChatSettingsDrawer chat={chat} open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
+            {chat && <ChatFilesDrawer chat={chat} open={filesOpen} onClose={() => setFilesOpen(false)} />}
+            {chat && <ChatGalleryDrawer chat={chat} open={galleryOpen} onClose={() => setGalleryOpen(false)} />}
+            {chat && wizardOpen && (
+              <ChatSetupWizard
+                chat={chat}
+                onFinish={() => {
+                  setWizardOpen(false);
+                  setSettingsOpen(true);
+                }}
+              />
             )}
           </div>
-          {/* end flex-row for left/right sidebars */}
-        </div>
 
-        {/* Sprite sidebar — right (only if expression agent enabled) */}
-        {expressionAgentEnabled && spritePosition === "right" && spriteCharacterIds.length > 0 && (
-          <SpriteSidebar
-            characterIds={spriteCharacterIds}
-            messages={msgPayload}
-            characterMap={characterMap}
-            isRoleplay
-          />
-        )}
-
-        {/* Pinned gallery images */}
-        <PinnedImageOverlay activeChatId={activeChatId} />
-
-        {/* Peek Prompt Modal */}
-        {peekPromptData && <PeekPromptModal data={peekPromptData} onClose={() => setPeekPromptData(null)} />}
-      </div>
-    );
-  }
-
-  // ═══════════════════════════════════════════════
-  // Conversation Mode — clean texting style
-  // ═══════════════════════════════════════════════
-  const convMsgPayload = (messages ?? []).map((m) => ({
-    role: m.role,
-    characterId: m.characterId,
-    content: m.content,
-  }));
-  return (
-    <div className="flex flex-1 overflow-hidden">
-      {/* Sprite sidebar — left (only if expression agent enabled) */}
-      {expressionAgentEnabled && spritePosition === "left" && spriteCharacterIds.length > 0 && (
-        <SpriteSidebar characterIds={spriteCharacterIds} messages={convMsgPayload} characterMap={characterMap} />
-      )}
-      <div className="relative flex flex-1 flex-col overflow-hidden bg-[var(--background)]">
-        {/* Chat header */}
-        <div className="border-b border-[var(--border)] bg-[var(--background)]">
-          <div className="flex items-center justify-between px-4 py-2.5">
-            <div className="flex items-center gap-2.5">
-              {/* Character avatar stack or icon */}
-              {chatCharIds.length > 0 ? (
-                <div className="flex -space-x-2">
-                  {chatCharIds.slice(0, 3).map((cid) => {
-                    const info = characterMap.get(cid);
-                    return info?.avatarUrl ? (
-                      <img
-                        key={cid}
-                        src={info.avatarUrl}
-                        alt={info.name}
-                        className="h-7 w-7 rounded-full object-cover ring-2 ring-[var(--background)]"
-                      />
-                    ) : (
-                      <div
-                        key={cid}
-                        className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent)] text-[10px] font-bold ring-2 ring-[var(--background)]"
-                      >
-                        {(info?.name ?? "?")[0]}
-                      </div>
-                    );
-                  })}
-                  {chatCharIds.length > 3 && (
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--secondary)] text-[9px] font-bold ring-2 ring-[var(--background)]">
-                      +{chatCharIds.length - 3}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div
-                  className="flex h-7 w-7 items-center justify-center rounded-full text-white"
-                  style={{ background: "linear-gradient(135deg, #4de5dd, #3ab8b1)" }}
-                >
-                  <MessageSquare size={12} />
-                </div>
-              )}
-              <div>
-                <span className="text-sm font-semibold text-[var(--foreground)]">{chat?.name ?? "Conversation"}</span>
-                {chatCharIds.length > 0 && (
-                  <p className="text-[10px] text-[var(--muted-foreground)]">
-                    {chatCharIds
-                      .map((cid) => characterMap.get(cid)?.name)
-                      .filter(Boolean)
-                      .join(", ")}
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setFilesOpen(true)}
-                className="rounded-lg p-1.5 text-[var(--muted-foreground)] transition-all hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
-                title="Manage Chat Files"
-              >
-                <FolderOpen size={16} />
-              </button>
-              <button
-                onClick={() => setGalleryOpen(true)}
-                className="rounded-lg p-1.5 text-[var(--muted-foreground)] transition-all hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
-                title="Gallery"
-              >
-                <Image size={16} />
-              </button>
-              {chatMeta.enableAgents && enabledAgentTypes.size > 0 && (
-                <AgentsHeaderButton
-                  agentConfigs={agentConfigs as AgentConfigRow[] | undefined}
-                  variant="conversation"
-                  onRetrigger={handleRerunTrackers}
+          {/* Right HUD sidebar */}
+          {hudPosition === "right" && chat && chatMeta.enableAgents && (
+            <div className="relative z-40 flex flex-col items-center gap-1.5 overflow-y-auto px-1.5 py-2 max-md:hidden">
+              <div className="flex flex-col items-center gap-1">
+                <SummaryButton chatId={chat?.id ?? null} summary={chatMeta.summary ?? null} />
+                <RpToolbarButton
+                  icon={<FolderOpen size={14} />}
+                  title="Manage Chat Files"
+                  onClick={() => setFilesOpen(true)}
                 />
-              )}
-              {failedAgentTypes.length > 0 && (
-                <button
-                  onClick={handleRetryAgents}
-                  disabled={agentProcessing}
-                  className="rounded-lg p-1.5 text-amber-500 transition-all hover:bg-[var(--accent)] hover:text-amber-400 disabled:opacity-50"
-                  title="Retry failed agents"
-                >
-                  <RefreshCw size={16} className={agentProcessing ? "animate-spin" : ""} />
-                </button>
-              )}
-              <button
-                onClick={() => setSettingsOpen(true)}
-                className="rounded-lg p-1.5 text-[var(--muted-foreground)] transition-all hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
-                title="Chat Settings"
-              >
-                <Settings2 size={16} />
-              </button>
-            </div>
-          </div>
-
-          {/* HUD widgets row (when agents enabled) */}
-          {chat && chatMeta.enableAgents && (
-            <div className="overflow-x-auto border-t border-[var(--border)] px-4 py-1.5">
+                {expressionAgentEnabled && chatCharIds.length > 0 && (
+                  <RpToolbarButton
+                    icon={<FlipHorizontal2 size={14} />}
+                    title={`Sprite: ${spritePosition} side`}
+                    onClick={handleToggleSpritePosition}
+                  />
+                )}
+                <RpToolbarButton icon={<Image size={14} />} title="Gallery" onClick={() => setGalleryOpen(true)} />
+                <RpToolbarButton
+                  icon={<Settings2 size={14} />}
+                  title="Chat Settings"
+                  onClick={() => setSettingsOpen(true)}
+                />
+              </div>
+              <div className="w-8 border-t border-white/10" />
               <RoleplayHUD
                 chatId={chat.id}
                 characterCount={chatCharIds.length}
-                layout="top"
+                layout="right"
                 onRetriggerTrackers={handleRerunTrackers}
               />
             </div>
           )}
         </div>
-
-        {/* Combat Encounter Modal */}
-        {encounterActive && <EncounterModal />}
-
-        {/* Messages area */}
-        <div className="relative flex-1 overflow-hidden">
-          {chatBackground && (
-            <>
-              <CrossfadeBackground url={chatBackground} />
-              <div className="absolute inset-0 bg-[var(--background)]/60" />
-            </>
-          )}
-          <div ref={scrollRef} className="relative h-full overflow-y-auto px-4 pt-4 pb-1">
-            {/* Load More button */}
-            {hasNextPage && (
-              <div className="mb-3 flex justify-center">
-                <button
-                  onClick={handleLoadMore}
-                  disabled={isFetchingNextPage}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)]/80 px-3 py-1.5 text-xs font-medium text-[var(--muted-foreground)] transition-all hover:bg-[var(--secondary)] hover:text-[var(--foreground)] disabled:opacity-50"
-                >
-                  {isFetchingNextPage ? <Loader2 size={12} className="animate-spin" /> : <ChevronUp size={12} />}
-                  Load More
-                </button>
-              </div>
-            )}
-
-            {isLoading && (
-              <div className="flex flex-col items-center gap-3 py-12">
-                <div className="shimmer h-12 w-12 rounded-xl" />
-                <div className="shimmer h-3 w-32 rounded-full" />
-              </div>
-            )}
-
-            {messages?.map((msg, i) => {
-              const isRegenerating = isStreaming && regenerateMessageId === msg.id;
-              const displayMsg = isRegenerating ? { ...msg, content: streamBuffer || "" } : msg;
-              return (
-                <div key={msg.id}>
-                  <ChatMessage
-                    message={displayMsg}
-                    isStreaming={isRegenerating}
-                    index={i}
-                    onDelete={handleDelete}
-                    onRegenerate={handleRegenerate}
-                    onEdit={handleEdit}
-                    onSetActiveSwipe={handleSetActiveSwipe}
-                    onToggleConversationStart={handleToggleConversationStart}
-                    onPeekPrompt={handlePeekPrompt}
-                    onBranch={handleBranch}
-                    isLastAssistantMessage={msg.id === lastAssistantMessageId}
-                    characterMap={characterMap}
-                    personaInfo={personaInfo}
-                    chatMode={chatMode}
-                    isGrouped={isGrouped(i)}
-                    groupChatMode={groupChatMode}
-                    chatCharacterIds={chatCharIds}
-                  />
-                </div>
-              );
-            })}
-
-            {/* Streaming / typing indicator (new message only, not regeneration) */}
-            {isStreaming && !regenerateMessageId && (
-              <div className="animate-message-in">
-                <ChatMessage
-                  message={{
-                    id: "__streaming__",
-                    chatId: activeChatId,
-                    role: "assistant",
-                    characterId: streamingCharacterId ?? null,
-                    content: streamBuffer || "",
-                    activeSwipeIndex: 0,
-                    extra: { displayText: null, isGenerated: true, tokenCount: 0, generationInfo: null },
-                    createdAt: new Date().toISOString(),
-                  }}
-                  isStreaming
-                  index={-1}
-                  characterMap={characterMap}
-                  personaInfo={personaInfo}
-                  chatMode={chatMode}
-                  groupChatMode={groupChatMode}
-                  chatCharacterIds={chatCharIds}
-                />
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-        </div>
-
-        {/* Input area */}
-        <div className="relative">
-          {combatAgentEnabled && (
-            <div className="flex justify-center py-1">
-              <button
-                onClick={() => startEncounter()}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs text-[var(--muted-foreground)] transition-all hover:bg-[var(--accent)] hover:text-orange-400"
-                title="Start Combat Encounter"
-              >
-                <Swords size={14} />
-                <span>Encounter</span>
-              </button>
-            </div>
-          )}
-          <ChatInput mode="conversation" characterNames={characterNames} />
-        </div>
-
-        {/* Settings drawer */}
-        {chat && <ChatSettingsDrawer chat={chat} open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
-        {/* Chat files drawer */}
-        {chat && <ChatFilesDrawer chat={chat} open={filesOpen} onClose={() => setFilesOpen(false)} />}
-        {/* Gallery drawer */}
-        {chat && <ChatGalleryDrawer chat={chat} open={galleryOpen} onClose={() => setGalleryOpen(false)} />}
       </div>
 
       {/* Sprite sidebar — right (only if expression agent enabled) */}
       {expressionAgentEnabled && spritePosition === "right" && spriteCharacterIds.length > 0 && (
-        <SpriteSidebar characterIds={spriteCharacterIds} messages={convMsgPayload} characterMap={characterMap} />
+        <SpriteSidebar
+          characterIds={spriteCharacterIds}
+          messages={msgPayload}
+          characterMap={characterMap}
+          isRoleplay={isRoleplay}
+        />
       )}
 
-      {/* Agent thought bubbles */}
-      <AgentThoughtBubbles />
+      {/* Agent thought bubbles (conversation only) */}
+      {!isRoleplay && <AgentThoughtBubbles />}
 
       {/* Pinned gallery images */}
       <PinnedImageOverlay activeChatId={activeChatId} />
@@ -1267,6 +984,32 @@ function TypingIndicator() {
         <span className="h-2 w-2 animate-bounce rounded-full bg-[var(--muted-foreground)]/60 [animation-delay:300ms]" />
       </div>
     </div>
+  );
+}
+
+/** Glassmorphism toolbar button for roleplay mode */
+function RpToolbarButton({
+  icon,
+  title,
+  onClick,
+  size,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  onClick: () => void;
+  size?: "sm";
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex items-center justify-center rounded-full bg-white/5 border border-white/10 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white",
+        size === "sm" ? "p-1" : "p-1.5",
+      )}
+      title={title}
+    >
+      {icon}
+    </button>
   );
 }
 
@@ -1325,205 +1068,12 @@ function QuickStartCard({
 }
 
 /** Summary button with popover — lives in the chat header */
-/** Agents header button — shows agent activity grouped by phase */
-function AgentsHeaderButton({
-  agentConfigs,
-  variant,
-  onRetrigger,
-}: {
-  agentConfigs: AgentConfigRow[] | undefined;
-  variant: "roleplay" | "conversation";
-  onRetrigger?: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const thoughtBubbles = useAgentStore((s) => s.thoughtBubbles);
-  const isProcessing = useAgentStore((s) => s.isProcessing);
-  const clearThoughtBubbles = useAgentStore((s) => s.clearThoughtBubbles);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  // Build phase map from agentConfigs + built-in fallback
-  const phaseMap = useMemo(() => {
-    const map = new Map<string, string>();
-    // Built-in agent defaults
-    for (const a of BUILT_IN_AGENTS) {
-      map.set(a.id, a.phase);
-    }
-    // DB configs override
-    if (agentConfigs) {
-      for (const a of agentConfigs) {
-        map.set(a.type, a.phase);
-      }
-    }
-    return map;
-  }, [agentConfigs]);
-
-  // Group thought bubbles by phase
-  const grouped = useMemo(() => {
-    const groups: Record<string, typeof thoughtBubbles> = {
-      pre_generation: [],
-      parallel: [],
-      post_processing: [],
-    };
-    for (const b of thoughtBubbles) {
-      const phase = phaseMap.get(b.agentId) ?? "parallel";
-      (groups[phase] ??= []).push(b);
-    }
-    return groups;
-  }, [thoughtBubbles, phaseMap]);
-
-  const phaseLabels: Record<string, string> = {
-    pre_generation: "Pre-Generation",
-    parallel: "Parallel",
-    post_processing: "Post-Processing",
-  };
-
-  const isRP = variant === "roleplay";
-  const btnBase = "rounded-lg p-1.5 transition-all";
-  const btnIdle = isRP
-    ? "text-purple-400/60 hover:bg-white/10 hover:text-purple-300"
-    : "text-purple-500/60 hover:bg-[var(--accent)] hover:text-purple-400";
-  const btnActive = isRP ? "bg-white/15 text-purple-300" : "bg-[var(--accent)] text-purple-400";
-  const dropdownBg = isRP ? "border-white/10 bg-black/80 backdrop-blur-xl" : "border-[var(--border)] bg-[var(--card)]";
-  const textMuted = isRP ? "text-white/40" : "text-[var(--muted-foreground)]";
-  const bubbleBg = isRP ? "bg-white/5" : "bg-[var(--primary)]/8";
-  const badgeBg = isRP ? "bg-purple-500/80" : "bg-purple-500";
-
-  return (
-    <div className="relative" ref={dropdownRef}>
-      <button onClick={() => setOpen(!open)} className={cn(btnBase, open ? btnActive : btnIdle)} title="Agent activity">
-        <Sparkles size={16} className={isProcessing ? "animate-pulse" : ""} />
-        {thoughtBubbles.length > 0 && (
-          <span
-            className={cn(
-              "absolute -right-0.5 -top-0.5 flex h-3.5 min-w-[0.875rem] items-center justify-center rounded-full px-0.5 text-[8px] font-bold text-white",
-              badgeBg,
-            )}
-          >
-            {thoughtBubbles.length}
-          </span>
-        )}
-      </button>
-
-      {open && (
-        <div
-          className={cn(
-            "absolute right-0 top-full mt-1 w-80 max-h-80 overflow-y-auto rounded-xl border shadow-xl z-50 animate-message-in",
-            dropdownBg,
-          )}
-        >
-          {/* Processing indicator */}
-          {isProcessing && (
-            <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2">
-              <Sparkles size={12} className="text-purple-400 animate-pulse" />
-              <span className={cn("text-[10px]", textMuted)}>Agents thinking…</span>
-            </div>
-          )}
-
-          {/* Empty state */}
-          {thoughtBubbles.length === 0 && !isProcessing && (
-            <div className={cn("px-3 py-4 text-center text-[10px]", textMuted)}>No agent activity yet</div>
-          )}
-
-          {/* Grouped results */}
-          {thoughtBubbles.length > 0 && (
-            <>
-              <div
-                className={cn(
-                  "flex items-center justify-between border-b px-3 py-1.5",
-                  isRP ? "border-white/5" : "border-[var(--border)]",
-                )}
-              >
-                <span className={cn("text-[10px]", textMuted)}>
-                  {thoughtBubbles.length} result{thoughtBubbles.length !== 1 ? "s" : ""}
-                </span>
-                <button
-                  onClick={clearThoughtBubbles}
-                  className={cn(
-                    "text-[10px] transition-colors",
-                    textMuted,
-                    isRP ? "hover:text-white/60" : "hover:text-[var(--foreground)]",
-                  )}
-                >
-                  Clear all
-                </button>
-              </div>
-              <div className="p-2 flex flex-col gap-2">
-                {(["pre_generation", "parallel", "post_processing"] as const).map((phase) => {
-                  const items = grouped[phase];
-                  if (!items || items.length === 0) return null;
-                  return (
-                    <div key={phase}>
-                      <div className={cn("text-[9px] font-semibold uppercase tracking-wider px-1 mb-1", textMuted)}>
-                        {phaseLabels[phase]}
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        {items.map((bubble, i) => (
-                          <div
-                            key={`${bubble.agentId}-${bubble.timestamp}-${i}`}
-                            className={cn("rounded-lg p-2 text-[10px]", bubbleBg)}
-                          >
-                            <span className="font-semibold text-purple-400">{bubble.agentName}</span>
-                            <p className={cn("mt-0.5 whitespace-pre-wrap leading-relaxed", textMuted)}>
-                              {bubble.content}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-
-          {/* Re-run agents button */}
-          {onRetrigger && (
-            <div className={cn("border-t px-3 py-2", isRP ? "border-white/5" : "border-[var(--border)]")}>
-              <button
-                onClick={() => {
-                  onRetrigger();
-                  setOpen(false);
-                }}
-                disabled={isProcessing}
-                className={cn(
-                  "flex w-full items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-medium transition-all disabled:opacity-50",
-                  isRP
-                    ? "bg-purple-500/20 text-purple-300 hover:bg-purple-500/30"
-                    : "bg-purple-500/10 text-purple-500 hover:bg-purple-500/20",
-                )}
-              >
-                <RefreshCw size={11} className={isProcessing ? "animate-spin" : ""} />
-                {isProcessing ? "Running…" : "Re-run Trackers"}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /**
  * ToolbarMenu — a "..." button on mobile that reveals all toolbar icons in a popover.
  * On desktop, the icons are rendered inline normally.
  */
-function ToolbarMenu({
-  children,
-  variant = "roleplay",
-}: {
-  children: React.ReactNode;
-  variant?: "roleplay" | "conversation";
-}) {
+function ToolbarMenu({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -1536,8 +1086,6 @@ function ToolbarMenu({
     return () => document.removeEventListener("mousedown", handle);
   }, [open]);
 
-  const isRp = variant === "roleplay";
-
   return (
     <>
       {/* Desktop: show children inline */}
@@ -1548,10 +1096,8 @@ function ToolbarMenu({
           onClick={() => setOpen(!open)}
           className={cn(
             "flex items-center justify-center rounded-full border p-1.5 backdrop-blur-md transition-all",
-            isRp
-              ? "bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white"
-              : "text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]",
-            open && (isRp ? "bg-white/10 border-white/20 text-white" : "bg-[var(--accent)]"),
+            "bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white",
+            open && "bg-white/10 border-white/20 text-white",
           )}
           title="More options"
         >
@@ -1559,12 +1105,7 @@ function ToolbarMenu({
         </button>
         {open && (
           <div
-            className={cn(
-              "absolute right-0 top-full z-50 mt-1 flex flex-col gap-0.5 rounded-xl border p-1.5 shadow-xl animate-message-in",
-              isRp
-                ? "border-white/10 bg-black/80 backdrop-blur-xl"
-                : "border-[var(--border)] bg-[var(--popover)] backdrop-blur-xl",
-            )}
+            className="absolute right-0 top-full z-50 mt-1 flex flex-col gap-0.5 rounded-xl border border-white/10 bg-black/80 p-1.5 shadow-xl backdrop-blur-xl animate-message-in"
             onClick={() => setOpen(false)}
           >
             {children}

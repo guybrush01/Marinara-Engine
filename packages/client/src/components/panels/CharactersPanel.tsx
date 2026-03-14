@@ -350,7 +350,7 @@ export function CharactersPanel() {
         </button>
         <button
           onClick={() => openModal("character-maker")}
-          className="flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-400 to-fuchsia-500 px-3 py-2 text-xs font-medium text-white shadow-md shadow-violet-500/15 transition-all hover:shadow-lg hover:shadow-violet-500/25 active:scale-[0.98]"
+          className="flex w-9 items-center justify-center rounded-xl bg-gradient-to-r from-violet-400 to-fuchsia-500 py-2 text-xs font-medium text-white shadow-md shadow-violet-500/15 transition-all hover:shadow-lg hover:shadow-violet-500/25 active:scale-[0.98]"
           title="AI Character Maker"
         >
           <Sparkles size={12} />

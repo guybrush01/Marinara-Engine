@@ -1,0 +1,25 @@
+# ──────────────────────────────────────────────
+# Marinara Engine — Docker Compose
+# ──────────────────────────────────────────────
+# Usage:
+#   docker compose up -d          # start
+#   docker compose up -d --build  # rebuild & start
+#   docker compose down            # stop (data is preserved)
+#
+# ⚠ Never use "docker compose down -v" unless you want to DELETE all data
+#   (database, gallery images, avatars, sprites, backgrounds, fonts).
+# ──────────────────────────────────────────────
+services:
+  marinara:
+    build: .
+    ports:
+      - "${PORT:-7860}:7860"
+    volumes:
+      - marinara-data:/app/data
+    environment:
+      - NODE_ENV=production
+      - DATA_DIR=/app/data
+    restart: unless-stopped
+
+volumes:
+  marinara-data:

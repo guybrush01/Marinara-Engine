@@ -33,6 +33,7 @@ import { wrapContent } from "../services/prompt/format-engine.js";
 import type { LLMToolDefinition, ChatMessage, LLMUsage } from "../services/llm/base-provider.js";
 import { executeToolCalls } from "../services/tools/tool-executor.js";
 import { createAgentPipeline, type ResolvedAgent } from "../services/agents/agent-pipeline.js";
+import { DATA_DIR } from "../utils/data-dir.js";
 import { executeAgent } from "../services/agents/agent-executor.js";
 import { executeKnowledgeRetrieval } from "../services/agents/knowledge-retrieval.js";
 import { extractFileText, getSourceFilePath } from "./knowledge-sources.routes.js";
@@ -360,6 +361,12 @@ export async function generateRoutes(app: FastifyInstance) {
       // ────────────────────────────────────────
       // Agent Pipeline: resolve enabled agents
       // ────────────────────────────────────────
+      const chatActiveAgentIds: string[] = Array.isArray(chatMeta.activeAgentIds)
+        ? (chatMeta.activeAgentIds as string[])
+        : [];
+      const hasPerChatAgentList = chatActiveAgentIds.length > 0;
+      const perChatAgentSet = new Set(chatActiveAgentIds);
+
       const enabledConfigs = chatEnableAgents ? await agentsStore.listEnabled() : [];
 
       // Also include built-in agents that are enabled by default but have no DB row yet.
@@ -377,6 +384,8 @@ export async function generateRoutes(app: FastifyInstance) {
       for (const cfg of enabledConfigs) {
         // Chat Summary agent is manual-only — skip it in the generation pipeline
         if (cfg.type === "chat-summary") continue;
+        // If this chat has a per-chat agent list, only include agents in that list
+        if (hasPerChatAgentList && !perChatAgentSet.has(cfg.type)) continue;
         const settings = cfg.settings ? JSON.parse(cfg.settings as string) : {};
         let agentProvider = provider;
         let agentModel = conn.model;
@@ -408,6 +417,8 @@ export async function generateRoutes(app: FastifyInstance) {
 
       // Built-in agents with no DB row → use defaults
       for (const builtIn of defaultEnabledBuiltIns) {
+        // If this chat has a per-chat agent list, only include agents in that list
+        if (hasPerChatAgentList && !perChatAgentSet.has(builtIn.id)) continue;
         resolvedAgents.push({
           id: `builtin:${builtIn.id}`,
           type: builtIn.id,
@@ -586,6 +597,7 @@ export async function generateRoutes(app: FastifyInstance) {
         memory: {},
         activatedLorebookEntries: null,
         writableLorebookIds: null,
+        signal: abortController.signal,
       };
 
       // If the expression agent is enabled, load available sprite expressions per character
@@ -593,7 +605,7 @@ export async function generateRoutes(app: FastifyInstance) {
         try {
           const { readdirSync, existsSync: existsSyncFs } = await import("fs");
           const { join: joinPath, extname: extnameFs } = await import("path");
-          const spritesRoot = joinPath(process.cwd(), "data", "sprites");
+          const spritesRoot = joinPath(DATA_DIR, "sprites");
           const spriteExts = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".svg"]);
           const perChar: Array<{ characterId: string; characterName: string; expressions: string[] }> = [];
           for (const char of agentContext.characters) {
@@ -618,7 +630,7 @@ export async function generateRoutes(app: FastifyInstance) {
         try {
           const { readdirSync, readFileSync, existsSync } = await import("fs");
           const { join, extname } = await import("path");
-          const bgDir = join(process.cwd(), "data", "backgrounds");
+          const bgDir = join(DATA_DIR, "backgrounds");
           if (existsSync(bgDir)) {
             const exts = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"]);
             const files = readdirSync(bgDir).filter((f: string) => exts.has(extname(f).toLowerCase()));
@@ -810,6 +822,9 @@ export async function generateRoutes(app: FastifyInstance) {
         }
       }
 
+      // ── Early exit if client disconnected during pre-generation agents ──
+      if (abortController.signal.aborted) return;
+
       // ────────────────────────────────────────
       // Knowledge Retrieval agent (chunked RAG)
       // ────────────────────────────────────────
@@ -940,6 +955,9 @@ export async function generateRoutes(app: FastifyInstance) {
         );
       }
 
+      // ── Early exit if client disconnected during knowledge retrieval / injection ──
+      if (abortController.signal.aborted) return;
+
       // Check if tool-use is requested (from chat metadata or input).
       // Tools are also enabled when agents are active — agents work separately
       // and may depend on tools (dice rolls, game state, expressions) even if
@@ -960,8 +978,17 @@ export async function generateRoutes(app: FastifyInstance) {
         scriptBody: string | null;
       }> = [];
       if (enableTools) {
+        // Per-chat tool selection (empty = all tools)
+        const chatActiveToolIds: string[] = Array.isArray(chatMeta.activeToolIds)
+          ? (chatMeta.activeToolIds as string[])
+          : [];
+        const hasToolFilter = chatActiveToolIds.length > 0;
+
         // Built-in tools
-        toolDefs = BUILT_IN_TOOLS.map((t) => ({
+        const builtInFiltered = hasToolFilter
+          ? BUILT_IN_TOOLS.filter((t) => chatActiveToolIds.includes(t.name))
+          : BUILT_IN_TOOLS;
+        toolDefs = builtInFiltered.map((t) => ({
           type: "function" as const,
           function: {
             name: t.name,
@@ -971,7 +998,10 @@ export async function generateRoutes(app: FastifyInstance) {
         }));
         // Custom tools from DB
         const enabledCustomTools = await customToolsStore.listEnabled();
-        for (const ct of enabledCustomTools) {
+        const customFiltered = hasToolFilter
+          ? enabledCustomTools.filter((ct: any) => chatActiveToolIds.includes(ct.name))
+          : enabledCustomTools;
+        for (const ct of customFiltered) {
           const schema =
             typeof ct.parametersSchema === "string" ? JSON.parse(ct.parametersSchema) : ct.parametersSchema;
           toolDefs.push({
@@ -1197,6 +1227,7 @@ export async function generateRoutes(app: FastifyInstance) {
               verbosity: verbosity ?? undefined,
               onThinking,
               onToken,
+              signal: abortController.signal,
             });
 
             // If provider doesn't support onToken (fell back to non-streaming),
@@ -1297,6 +1328,7 @@ export async function generateRoutes(app: FastifyInstance) {
                 verbosity: verbosity ?? undefined,
                 onThinking,
                 onToken,
+                signal: abortController.signal,
               });
               if (finalResult.content && fullResponse.length === prevLen) {
                 writeContentChunked(finalResult.content);
@@ -1324,6 +1356,7 @@ export async function generateRoutes(app: FastifyInstance) {
             reasoningEffort: resolvedEffort ?? undefined,
             verbosity: verbosity ?? undefined,
             onThinking,
+            signal: abortController.signal,
           });
           let result = await gen.next();
           while (!result.done) {

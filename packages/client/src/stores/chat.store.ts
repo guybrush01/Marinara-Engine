@@ -24,6 +24,8 @@ interface ChatState {
   swipeIndex: Map<string, number>; // messageId → active swipe index
   /** When true, ChatArea should open the settings drawer on next render. */
   shouldOpenSettings: boolean;
+  /** When true, ChatArea should show the setup wizard for the newly created chat. */
+  shouldOpenWizard: boolean;
 
   // Actions
   setActiveChat: (chat: Chat | null) => void;
@@ -41,6 +43,7 @@ interface ChatState {
   setStreamingCharacterId: (id: string | null) => void;
   setSwipeIndex: (messageId: string, index: number) => void;
   setShouldOpenSettings: (v: boolean) => void;
+  setShouldOpenWizard: (v: boolean) => void;
   reset: () => void;
 }
 
@@ -62,6 +65,7 @@ export const useChatStore = create<ChatState>()(
     streamingCharacterId: null,
     swipeIndex: new Map(),
     shouldOpenSettings: false,
+    shouldOpenWizard: false,
 
     setActiveChat: (chat) => set({ activeChat: chat }),
     setActiveChatId: (id) => {
@@ -104,6 +108,8 @@ export const useChatStore = create<ChatState>()(
     setStreamingCharacterId: (id) => set({ streamingCharacterId: id }),
 
     setShouldOpenSettings: (v) => set({ shouldOpenSettings: v }),
+
+    setShouldOpenWizard: (v) => set({ shouldOpenWizard: v }),
 
     setSwipeIndex: (messageId, index) =>
       set((state) => {

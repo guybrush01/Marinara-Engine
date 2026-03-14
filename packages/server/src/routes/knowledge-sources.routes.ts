@@ -7,8 +7,9 @@ import { mkdir, readFile, unlink, writeFile, stat } from "fs/promises";
 import { createWriteStream, existsSync, mkdirSync, readFileSync } from "fs";
 import { pipeline } from "stream/promises";
 import { nanoid } from "nanoid";
+import { DATA_DIR } from "../utils/data-dir.js";
 
-const SOURCES_DIR = join(process.cwd(), "data", "knowledge-sources");
+const SOURCES_DIR = join(DATA_DIR, "knowledge-sources");
 const META_FILE = join(SOURCES_DIR, "meta.json");
 
 // Supported text-based formats (read as UTF-8)
@@ -54,7 +55,7 @@ async function writeMeta(meta: MetaStore) {
     // On error, reset the chain but rethrow to propagate the failure
     async () => {
       await writeFile(META_FILE, JSON.stringify(meta, null, 2), "utf-8");
-    }
+    },
   );
 
   await metaWriteChain;

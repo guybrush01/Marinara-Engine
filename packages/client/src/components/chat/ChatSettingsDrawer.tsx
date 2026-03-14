@@ -31,7 +31,10 @@ import { useConnections } from "../../hooks/use-connections";
 import { useUpdateChat, useUpdateChatMetadata, useChat, useCreateMessage } from "../../hooks/use-chats";
 import { api } from "../../lib/api-client";
 import { useUIStore } from "../../stores/ui.store";
+import { useAgentConfigs, type AgentConfigRow } from "../../hooks/use-agents";
+import { BUILT_IN_AGENTS, BUILT_IN_TOOLS } from "@marinara-engine/shared";
 import type { Chat } from "@marinara-engine/shared";
+import { useCustomTools, type CustomToolRow } from "../../hooks/use-custom-tools";
 
 interface ChatSettingsDrawerProps {
   chat: Chat;
@@ -49,6 +52,8 @@ export function ChatSettingsDrawer({ chat, open, onClose }: ChatSettingsDrawerPr
   const { data: presets } = usePresets();
   const { data: connections } = useConnections();
   const { data: allPersonas } = usePersonas();
+  const { data: agentConfigs } = useAgentConfigs();
+  const { data: customTools } = useCustomTools();
   const personas = (allPersonas ?? []) as Array<{ id: string; name: string; avatarPath: string | null }>;
 
   const chatCharIds: string[] =
@@ -56,8 +61,43 @@ export function ChatSettingsDrawer({ chat, open, onClose }: ChatSettingsDrawerPr
 
   const metadata = typeof chat.metadata === "string" ? JSON.parse(chat.metadata) : (chat.metadata ?? {});
   const activeLorebookIds: string[] = metadata.activeLorebookIds ?? [];
+  const activeAgentIds: string[] = metadata.activeAgentIds ?? [];
+  const activeToolIds: string[] = metadata.activeToolIds ?? [];
   const spriteCharacterIds: string[] = metadata.spriteCharacterIds ?? [];
   const spritePosition: "left" | "right" = metadata.spritePosition ?? "left";
+
+  // Build the available agent list: built-in + custom agents from DB
+  const availableAgents = useMemo(() => {
+    const agents: Array<{ id: string; name: string; description: string; category: string }> = [];
+    for (const a of BUILT_IN_AGENTS) {
+      agents.push({ id: a.id, name: a.name, description: a.description, category: a.category });
+    }
+    // Custom agents from DB
+    if (agentConfigs) {
+      for (const c of agentConfigs as AgentConfigRow[]) {
+        if (!BUILT_IN_AGENTS.some((b) => b.id === c.type)) {
+          agents.push({ id: c.type, name: c.name, description: c.description, category: "custom" });
+        }
+      }
+    }
+    return agents;
+  }, [agentConfigs]);
+
+  // Build the available tool list: built-in + custom tools from DB
+  const availableTools = useMemo(() => {
+    const tools: Array<{ id: string; name: string; description: string }> = [];
+    for (const t of BUILT_IN_TOOLS) {
+      tools.push({ id: t.name, name: t.name, description: t.description });
+    }
+    if (customTools) {
+      for (const ct of customTools as CustomToolRow[]) {
+        if (ct.enabled === "true" || ct.enabled === "1") {
+          tools.push({ id: ct.name, name: ct.name, description: ct.description });
+        }
+      }
+    }
+    return tools;
+  }, [customTools]);
 
   // ── Helpers ──
   const characters = (allCharacters ?? []) as Array<{
@@ -211,6 +251,22 @@ export function ChatSettingsDrawer({ chat, open, onClose }: ChatSettingsDrawerPr
     updateMeta.mutate({ id: chat.id, activeLorebookIds: current });
   };
 
+  const toggleAgent = (agentId: string) => {
+    const current = [...activeAgentIds];
+    const idx = current.indexOf(agentId);
+    if (idx >= 0) current.splice(idx, 1);
+    else current.push(agentId);
+    updateMeta.mutate({ id: chat.id, activeAgentIds: current });
+  };
+
+  const toggleTool = (toolId: string) => {
+    const current = [...activeToolIds];
+    const idx = current.indexOf(toolId);
+    if (idx >= 0) current.splice(idx, 1);
+    else current.push(toolId);
+    updateMeta.mutate({ id: chat.id, activeToolIds: current });
+  };
+
   const setPreset = (presetId: string | null) => {
     updateChat.mutate(
       { id: chat.id, promptPresetId: presetId },
@@ -230,8 +286,12 @@ export function ChatSettingsDrawer({ chat, open, onClose }: ChatSettingsDrawerPr
   const [nameVal, setNameVal] = useState(chat.name);
   const [showCharPicker, setShowCharPicker] = useState(false);
   const [showLbPicker, setShowLbPicker] = useState(false);
+  const [showAgentPicker, setShowAgentPicker] = useState(false);
+  const [showToolPicker, setShowToolPicker] = useState(false);
   const [charSearch, setCharSearch] = useState("");
   const [lbSearch, setLbSearch] = useState("");
+  const [agentSearch, setAgentSearch] = useState("");
+  const [toolSearch, setToolSearch] = useState("");
   const [choiceModalPresetId, setChoiceModalPresetId] = useState<string | null>(null);
 
   const saveName = () => {
@@ -314,6 +374,37 @@ export function ChatSettingsDrawer({ chat, open, onClose }: ChatSettingsDrawerPr
                 Each generation will randomly pick from connections marked for the random pool.
               </p>
             )}
+          </Section>
+
+          {/* Preset */}
+          <Section
+            label="Prompt Preset"
+            icon={<Sliders size={14} />}
+            help="Presets control how the system prompt is structured and what generation parameters are used. Different presets produce different AI behaviors."
+          >
+            <div className="flex items-center gap-1.5">
+              <select
+                value={chat.promptPresetId ?? ""}
+                onChange={(e) => setPreset(e.target.value || null)}
+                className="flex-1 rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs outline-none ring-1 ring-transparent transition-shadow focus:ring-[var(--primary)]/40"
+              >
+                <option value="">None</option>
+                {((presets ?? []) as Array<{ id: string; name: string; isDefault?: boolean | string }>).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.isDefault === true || p.isDefault === "true" ? "Default" : p.name}
+                  </option>
+                ))}
+              </select>
+              {chat.promptPresetId && (
+                <button
+                  onClick={() => setChoiceModalPresetId(chat.promptPresetId!)}
+                  className="shrink-0 rounded-lg p-1.5 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+                  title="Edit preset variables"
+                >
+                  <Pencil size={13} />
+                </button>
+              )}
+            </div>
           </Section>
 
           {/* Persona */}
@@ -570,7 +661,7 @@ export function ChatSettingsDrawer({ chat, open, onClose }: ChatSettingsDrawerPr
                     <div
                       className={cn(
                         "h-5 w-9 overflow-hidden rounded-full p-0.5 transition-colors",
-                        metadata.groupSpeakerColors ? "bg-[var(--primary)]" : "bg-[var(--muted-foreground)]/30",
+                        metadata.groupSpeakerColors ? "bg-[var(--primary)]" : "bg-[var(--muted-foreground)]/50",
                       )}
                     >
                       <div
@@ -708,87 +799,11 @@ export function ChatSettingsDrawer({ chat, open, onClose }: ChatSettingsDrawerPr
             )}
           </Section>
 
-          {/* Preset */}
-          <Section
-            label="Prompt Preset"
-            icon={<Sliders size={14} />}
-            help="Presets control how the system prompt is structured and what generation parameters are used. Different presets produce different AI behaviors."
-          >
-            <div className="flex items-center gap-1.5">
-              <select
-                value={chat.promptPresetId ?? ""}
-                onChange={(e) => setPreset(e.target.value || null)}
-                className="flex-1 rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs outline-none ring-1 ring-transparent transition-shadow focus:ring-[var(--primary)]/40"
-              >
-                <option value="">None</option>
-                {((presets ?? []) as Array<{ id: string; name: string; isDefault?: boolean | string }>).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.isDefault === true || p.isDefault === "true" ? "Default" : p.name}
-                  </option>
-                ))}
-              </select>
-              {chat.promptPresetId && (
-                <button
-                  onClick={() => setChoiceModalPresetId(chat.promptPresetId!)}
-                  className="shrink-0 rounded-lg p-1.5 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
-                  title="Edit preset variables"
-                >
-                  <Pencil size={13} />
-                </button>
-              )}
-            </div>
-          </Section>
-
-          {/* Function Calling / Tool Use */}
-          <Section
-            label="Function Calling"
-            icon={<Wrench size={14} />}
-            help="When enabled, the AI can call built-in tools like dice rolls, game state updates, and lorebook searches during conversation."
-          >
-            <div className="space-y-2">
-              <button
-                onClick={() => {
-                  updateMeta.mutate({ id: chat.id, enableTools: !metadata.enableTools });
-                }}
-                className={cn(
-                  "flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left transition-all",
-                  metadata.enableTools
-                    ? "bg-[var(--primary)]/10 ring-1 ring-[var(--primary)]/30"
-                    : "bg-[var(--secondary)] hover:bg-[var(--accent)]",
-                )}
-              >
-                <div>
-                  <span className="text-xs font-medium">Enable Tool Use</span>
-                  <p className="text-[10px] text-[var(--muted-foreground)]">
-                    Allow AI to call functions (dice rolls, game state, etc.)
-                  </p>
-                </div>
-                <div
-                  className={cn(
-                    "h-5 w-9 overflow-hidden rounded-full p-0.5 transition-colors",
-                    metadata.enableTools ? "bg-[var(--primary)]" : "bg-[var(--muted-foreground)]/30",
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
-                      metadata.enableTools && "translate-x-3.5",
-                    )}
-                  />
-                </div>
-              </button>
-              {metadata.enableTools && (
-                <p className="text-[10px] text-[var(--muted-foreground)] px-1">
-                  Uses all functions enabled in the <strong>Functions</strong> tab.
-                </p>
-              )}
-            </div>
-          </Section>
-
           {/* Agents */}
           <Section
             label="Agents"
             icon={<Sparkles size={14} />}
+            count={activeAgentIds.length}
             help="When enabled, AI agents run automatically during generation to enrich the chat with world state tracking, expression detection, and more."
           >
             <div className="space-y-2">
@@ -812,7 +827,7 @@ export function ChatSettingsDrawer({ chat, open, onClose }: ChatSettingsDrawerPr
                 <div
                   className={cn(
                     "h-5 w-9 overflow-hidden rounded-full p-0.5 transition-colors",
-                    metadata.enableAgents ? "bg-[var(--primary)]" : "bg-[var(--muted-foreground)]/30",
+                    metadata.enableAgents ? "bg-[var(--primary)]" : "bg-[var(--muted-foreground)]/50",
                   )}
                 >
                   <div
@@ -823,10 +838,229 @@ export function ChatSettingsDrawer({ chat, open, onClose }: ChatSettingsDrawerPr
                   />
                 </div>
               </button>
+              <p className="text-[10px] text-[var(--muted-foreground)] px-1">
+                {metadata.enableAgents
+                  ? "If enabled, the agents added to this chat will work."
+                  : "If disabled, none of the agents will work."}
+              </p>
+
+              {/* Per-chat agent list */}
               {metadata.enableAgents && (
-                <p className="text-[10px] text-[var(--muted-foreground)] px-1">
-                  Uses all agents enabled in the <strong>Agents</strong> tab.
-                </p>
+                <>
+                  {activeAgentIds.length === 0 ? (
+                    <p className="text-[11px] text-[var(--muted-foreground)] px-1">No agents added to this chat.</p>
+                  ) : (
+                    <div className="flex flex-col gap-1">
+                      {activeAgentIds.map((agentId) => {
+                        const agent = availableAgents.find((a) => a.id === agentId);
+                        if (!agent) return null;
+                        return (
+                          <div
+                            key={agent.id}
+                            className="flex items-center gap-2.5 rounded-lg bg-[var(--primary)]/10 px-3 py-2 ring-1 ring-[var(--primary)]/30"
+                          >
+                            <Sparkles size={14} className="text-[var(--primary)]" />
+                            <div className="flex-1 min-w-0">
+                              <span className="block truncate text-xs">{agent.name}</span>
+                            </div>
+                            <button
+                              onClick={() => toggleAgent(agent.id)}
+                              className="flex h-5 w-5 items-center justify-center rounded-md text-[var(--muted-foreground)] transition-colors hover:bg-[var(--destructive)]/15 hover:text-[var(--destructive)]"
+                              title="Remove from chat"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Add agent picker */}
+                  {!showAgentPicker ? (
+                    <button
+                      onClick={() => {
+                        setShowAgentPicker(true);
+                        setAgentSearch("");
+                      }}
+                      className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[var(--border)] px-3 py-2 text-xs text-[var(--muted-foreground)] transition-colors hover:border-[var(--primary)]/40 hover:text-[var(--primary)]"
+                    >
+                      <Plus size={12} /> Add Agent
+                    </button>
+                  ) : (
+                    <PickerDropdown
+                      search={agentSearch}
+                      onSearchChange={setAgentSearch}
+                      onClose={() => setShowAgentPicker(false)}
+                      placeholder="Search agents…"
+                    >
+                      {availableAgents
+                        .filter((a) => !activeAgentIds.includes(a.id))
+                        .filter((a) => a.name.toLowerCase().includes(agentSearch.toLowerCase()))
+                        .map((a) => (
+                          <button
+                            key={a.id}
+                            onClick={() => {
+                              toggleAgent(a.id);
+                              setShowAgentPicker(false);
+                            }}
+                            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-all hover:bg-[var(--accent)]"
+                          >
+                            <Sparkles size={14} className="text-[var(--muted-foreground)]" />
+                            <div className="flex-1 min-w-0">
+                              <span className="block truncate text-xs">{a.name}</span>
+                              <span className="block truncate text-[10px] text-[var(--muted-foreground)]">
+                                {a.description}
+                              </span>
+                            </div>
+                            <Plus size={12} className="text-[var(--muted-foreground)]" />
+                          </button>
+                        ))}
+                      {availableAgents
+                        .filter((a) => !activeAgentIds.includes(a.id))
+                        .filter((a) => a.name.toLowerCase().includes(agentSearch.toLowerCase())).length === 0 && (
+                        <p className="px-3 py-2 text-[11px] text-[var(--muted-foreground)]">
+                          {availableAgents.filter((a) => !activeAgentIds.includes(a.id)).length === 0
+                            ? "All agents already added."
+                            : "No matches."}
+                        </p>
+                      )}
+                    </PickerDropdown>
+                  )}
+                </>
+              )}
+            </div>
+          </Section>
+
+          {/* Function Calling / Tool Use */}
+          <Section
+            label="Function Calling"
+            icon={<Wrench size={14} />}
+            count={activeToolIds.length}
+            help="When enabled, the AI can call built-in tools like dice rolls, game state updates, and lorebook searches during conversation."
+          >
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  updateMeta.mutate({ id: chat.id, enableTools: !metadata.enableTools });
+                }}
+                className={cn(
+                  "flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left transition-all",
+                  metadata.enableTools
+                    ? "bg-[var(--primary)]/10 ring-1 ring-[var(--primary)]/30"
+                    : "bg-[var(--secondary)] hover:bg-[var(--accent)]",
+                )}
+              >
+                <div>
+                  <span className="text-xs font-medium">Enable Tool Use</span>
+                  <p className="text-[10px] text-[var(--muted-foreground)]">
+                    Allow AI to call functions (dice rolls, game state, etc.)
+                  </p>
+                </div>
+                <div
+                  className={cn(
+                    "h-5 w-9 overflow-hidden rounded-full p-0.5 transition-colors",
+                    metadata.enableTools ? "bg-[var(--primary)]" : "bg-[var(--muted-foreground)]/50",
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+                      metadata.enableTools && "translate-x-3.5",
+                    )}
+                  />
+                </div>
+              </button>
+              <p className="text-[10px] text-[var(--muted-foreground)] px-1">
+                {metadata.enableTools
+                  ? "If enabled, the functions added to this chat will be available."
+                  : "If disabled, no functions will be available."}
+              </p>
+
+              {/* Per-chat tool list */}
+              {metadata.enableTools && (
+                <>
+                  {activeToolIds.length === 0 ? (
+                    <p className="text-[11px] text-[var(--muted-foreground)] px-1">No functions added to this chat.</p>
+                  ) : (
+                    <div className="flex flex-col gap-1">
+                      {activeToolIds.map((toolId) => {
+                        const tool = availableTools.find((t) => t.id === toolId);
+                        if (!tool) return null;
+                        return (
+                          <div
+                            key={tool.id}
+                            className="flex items-center gap-2.5 rounded-lg bg-[var(--primary)]/10 px-3 py-2 ring-1 ring-[var(--primary)]/30"
+                          >
+                            <Wrench size={14} className="text-[var(--primary)]" />
+                            <div className="flex-1 min-w-0">
+                              <span className="block truncate text-xs">{tool.name}</span>
+                            </div>
+                            <button
+                              onClick={() => toggleTool(tool.id)}
+                              className="flex h-5 w-5 items-center justify-center rounded-md text-[var(--muted-foreground)] transition-colors hover:bg-[var(--destructive)]/15 hover:text-[var(--destructive)]"
+                              title="Remove from chat"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Add tool picker */}
+                  {!showToolPicker ? (
+                    <button
+                      onClick={() => {
+                        setShowToolPicker(true);
+                        setToolSearch("");
+                      }}
+                      className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[var(--border)] px-3 py-2 text-xs text-[var(--muted-foreground)] transition-colors hover:border-[var(--primary)]/40 hover:text-[var(--primary)]"
+                    >
+                      <Plus size={12} /> Add Function
+                    </button>
+                  ) : (
+                    <PickerDropdown
+                      search={toolSearch}
+                      onSearchChange={setToolSearch}
+                      onClose={() => setShowToolPicker(false)}
+                      placeholder="Search functions…"
+                    >
+                      {availableTools
+                        .filter((t) => !activeToolIds.includes(t.id))
+                        .filter((t) => t.name.toLowerCase().includes(toolSearch.toLowerCase()))
+                        .map((t) => (
+                          <button
+                            key={t.id}
+                            onClick={() => {
+                              toggleTool(t.id);
+                              setShowToolPicker(false);
+                            }}
+                            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-all hover:bg-[var(--accent)]"
+                          >
+                            <Wrench size={14} className="text-[var(--muted-foreground)]" />
+                            <div className="flex-1 min-w-0">
+                              <span className="block truncate text-xs">{t.name}</span>
+                              <span className="block truncate text-[10px] text-[var(--muted-foreground)]">
+                                {t.description}
+                              </span>
+                            </div>
+                            <Plus size={12} className="text-[var(--muted-foreground)]" />
+                          </button>
+                        ))}
+                      {availableTools
+                        .filter((t) => !activeToolIds.includes(t.id))
+                        .filter((t) => t.name.toLowerCase().includes(toolSearch.toLowerCase())).length === 0 && (
+                        <p className="px-3 py-2 text-[11px] text-[var(--muted-foreground)]">
+                          {availableTools.filter((t) => !activeToolIds.includes(t.id)).length === 0
+                            ? "All functions already added."
+                            : "No matches."}
+                        </p>
+                      )}
+                    </PickerDropdown>
+                  )}
+                </>
               )}
             </div>
           </Section>
@@ -862,7 +1096,7 @@ export function ChatSettingsDrawer({ chat, open, onClose }: ChatSettingsDrawerPr
                 <div
                   className={cn(
                     "h-5 w-9 overflow-hidden rounded-full p-0.5 transition-colors",
-                    metadata.contextMessageLimit ? "bg-[var(--primary)]" : "bg-[var(--muted-foreground)]/30",
+                    metadata.contextMessageLimit ? "bg-[var(--primary)]" : "bg-[var(--muted-foreground)]/50",
                   )}
                 >
                   <div

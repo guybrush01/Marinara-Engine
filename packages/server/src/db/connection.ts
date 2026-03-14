@@ -3,7 +3,8 @@
 // ──────────────────────────────────────────────
 import * as schema from "./schema/index.js";
 import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
+import { DATA_DIR } from "../utils/data-dir.js";
 
 type DrizzleDB = ReturnType<typeof import("drizzle-orm/libsql").drizzle<typeof schema>>;
 
@@ -52,7 +53,7 @@ async function createDB(dbPath: string): Promise<DrizzleDB> {
 
 export async function getDB() {
   if (!dbPromise) {
-    const dbUrl = process.env.DATABASE_URL ?? "file:./data/marinara-engine.db";
+    const dbUrl = process.env.DATABASE_URL ?? `file:${join(DATA_DIR, "marinara-engine.db")}`;
     const dbPath = dbUrl.replace(/^file:/, "");
     dbPromise = createDB(dbPath);
   }

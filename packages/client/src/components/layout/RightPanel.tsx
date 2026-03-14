@@ -10,7 +10,6 @@ import { ConnectionsPanel } from "../panels/ConnectionsPanel";
 import { AgentsPanel } from "../panels/AgentsPanel";
 import { PersonasPanel } from "../panels/PersonasPanel";
 import { SettingsPanel } from "../panels/SettingsPanel";
-import { motion, AnimatePresence } from "framer-motion";
 
 const PANEL_CONFIG: Record<string, { title: string; icon: React.ReactNode; gradient: string }> = {
   characters: { title: "Characters", icon: <Users size={14} />, gradient: "from-pink-400 to-rose-500" },
@@ -60,20 +59,8 @@ export function RightPanel() {
         </button>
       </div>
 
-      {/* Content with animated transitions */}
-      <div className="relative flex-1 overflow-y-auto">
-        <AnimatePresence mode="popLayout">
-          <motion.div
-            key={panel}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.15 }}
-          >
-            {PanelComponent ? <PanelComponent /> : null}
-          </motion.div>
-        </AnimatePresence>
-      </div>
+      {/* Content */}
+      <div className="relative flex-1 overflow-y-auto">{PanelComponent ? <PanelComponent /> : null}</div>
     </div>
   );
 }

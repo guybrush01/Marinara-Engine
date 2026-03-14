@@ -52,6 +52,8 @@ export interface ChatOptions {
   reasoningEffort?: "low" | "medium" | "high" | "xhigh";
   /** Output verbosity for GPT-5+ models */
   verbosity?: "low" | "medium" | "high";
+  /** Abort signal — when triggered, the in-flight LLM request should be cancelled. */
+  signal?: AbortSignal;
 }
 
 /** Token usage statistics returned by the model */

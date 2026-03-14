@@ -96,6 +96,9 @@ export interface AgentContext {
   activatedLorebookEntries: Array<{ id: string; name: string; content: string; tag: string }> | null;
   /** All lorebook IDs the agent can write to */
   writableLorebookIds: string[] | null;
+  /** Abort signal — when triggered, agent execution should stop. Typed as `any` to avoid DOM/Node lib dependency. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  signal?: any;
 }
 
 /** Built-in agent type identifiers. */

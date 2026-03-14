@@ -5,8 +5,7 @@ import type { FastifyInstance } from "fastify";
 import { sql } from "drizzle-orm";
 import { existsSync, readdirSync, unlinkSync, rmSync } from "fs";
 import { join } from "path";
-
-const DATA_DIR = join(process.cwd(), "data");
+import { DATA_DIR } from "../utils/data-dir.js";
 
 function clearDirectory(dirPath: string) {
   if (!existsSync(dirPath)) return 0;

@@ -30,7 +30,14 @@ export function createChatsStorage(db: DB) {
         personaId: input.personaId,
         promptPresetId: input.promptPresetId,
         connectionId: input.connectionId,
-        metadata: JSON.stringify({ summary: null, tags: [], enableAgents: true, agentOverrides: {} }),
+        metadata: JSON.stringify({
+          summary: null,
+          tags: [],
+          enableAgents: true,
+          agentOverrides: {},
+          activeAgentIds: [],
+          activeToolIds: [],
+        }),
         createdAt: timestamp,
         updatedAt: timestamp,
       });

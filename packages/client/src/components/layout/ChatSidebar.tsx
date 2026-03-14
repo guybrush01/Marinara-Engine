@@ -115,6 +115,7 @@ export function ChatSidebar() {
           onSuccess: (chat) => {
             setActiveChatId(chat.id);
             useChatStore.getState().setShouldOpenSettings(true);
+            useChatStore.getState().setShouldOpenWizard(true);
           },
         },
       );

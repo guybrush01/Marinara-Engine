@@ -5,8 +5,9 @@ import type { FastifyInstance } from "fastify";
 import { existsSync, mkdirSync, createReadStream, readdirSync, unlinkSync } from "fs";
 import { writeFile, mkdir, readdir, unlink } from "fs/promises";
 import { join, extname } from "path";
+import { DATA_DIR } from "../utils/data-dir.js";
 
-const SPRITES_ROOT = join(process.cwd(), "data", "sprites");
+const SPRITES_ROOT = join(DATA_DIR, "sprites");
 
 function ensureDir(dir: string) {
   if (!existsSync(dir)) {

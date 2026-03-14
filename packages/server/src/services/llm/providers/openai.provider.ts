@@ -80,6 +80,7 @@ export class OpenAIProvider extends BaseLLMProvider {
         Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify(body),
+      ...(options.signal ? { signal: options.signal } : {}),
     });
 
     if (!response.ok) {
@@ -195,6 +196,7 @@ export class OpenAIProvider extends BaseLLMProvider {
         Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify(body),
+      ...(options.signal ? { signal: options.signal } : {}),
     });
 
     if (!response.ok) {

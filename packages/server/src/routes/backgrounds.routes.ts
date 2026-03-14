@@ -6,8 +6,9 @@ import { existsSync, mkdirSync, readdirSync, unlinkSync, readFileSync, writeFile
 import { join, extname, basename, parse as parsePath } from "path";
 import { pipeline } from "stream/promises";
 import { createWriteStream } from "fs";
+import { DATA_DIR } from "../utils/data-dir.js";
 
-const BG_DIR = join(process.cwd(), "data", "backgrounds");
+const BG_DIR = join(DATA_DIR, "backgrounds");
 const META_PATH = join(BG_DIR, "meta.json");
 
 // Ensure directory exists

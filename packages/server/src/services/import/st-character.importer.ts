@@ -9,8 +9,9 @@ import { existsSync, mkdirSync } from "fs";
 import { writeFile } from "fs/promises";
 import { join } from "path";
 import { randomUUID } from "crypto";
+import { DATA_DIR } from "../../utils/data-dir.js";
 
-const AVATAR_DIR = join(process.cwd(), "data", "avatars");
+const AVATAR_DIR = join(DATA_DIR, "avatars");
 
 function ensureAvatarDir() {
   if (!existsSync(AVATAR_DIR)) {

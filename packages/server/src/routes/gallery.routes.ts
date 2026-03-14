@@ -8,8 +8,9 @@ import { pipeline } from "stream/promises";
 import { createWriteStream } from "fs";
 import { createGalleryStorage } from "../services/storage/gallery.storage.js";
 import { newId } from "../utils/id-generator.js";
+import { DATA_DIR } from "../utils/data-dir.js";
 
-const GALLERY_DIR = join(process.cwd(), "data", "gallery");
+const GALLERY_DIR = join(DATA_DIR, "gallery");
 const ALLOWED_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"]);
 
 function ensureDir(chatId: string) {

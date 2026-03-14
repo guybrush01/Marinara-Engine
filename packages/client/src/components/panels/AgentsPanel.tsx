@@ -2,23 +2,9 @@
 // Panel: Agents & Tools
 // ──────────────────────────────────────────────
 import { useState } from "react";
-import {
-  Sparkles,
-  ToggleLeft,
-  ToggleRight,
-  Pencil,
-  Plus,
-  Wrench,
-  ChevronDown,
-  Trash2,
-  Bot,
-  Regex,
-  PenLine,
-  Radar,
-  Puzzle,
-} from "lucide-react";
+import { Sparkles, Pencil, Plus, Wrench, ChevronDown, Trash2, Bot, Regex, PenLine, Radar, Puzzle } from "lucide-react";
 import { useUIStore } from "../../stores/ui.store";
-import { useAgentConfigs, useToggleAgent, useDeleteAgent, type AgentConfigRow } from "../../hooks/use-agents";
+import { useAgentConfigs, useDeleteAgent, type AgentConfigRow } from "../../hooks/use-agents";
 import { useCustomTools, useDeleteCustomTool, type CustomToolRow } from "../../hooks/use-custom-tools";
 import {
   useRegexScripts,
@@ -33,7 +19,6 @@ export function AgentsPanel() {
   const { data: agentConfigs, isLoading } = useAgentConfigs();
   const { data: customTools } = useCustomTools();
   const { data: regexScripts } = useRegexScripts();
-  const toggleAgent = useToggleAgent();
   const deleteAgent = useDeleteAgent();
   const deleteTool = useDeleteCustomTool();
   const deleteRegex = useDeleteRegexScript();
@@ -241,14 +226,10 @@ export function AgentsPanel() {
             ) : (
               agents.map((agent) => {
                 const config = (agentConfigs as AgentConfigRow[] | undefined)?.find((c) => c.type === agent.id);
-                const enabled = config?.enabled === "true";
                 return (
                   <div
                     key={agent.id}
-                    className={cn(
-                      "flex items-start gap-2.5 rounded-lg p-2 transition-colors hover:bg-[var(--sidebar-accent)]",
-                      !enabled && "opacity-50",
-                    )}
+                    className="flex items-start gap-2.5 rounded-lg p-2 transition-colors hover:bg-[var(--sidebar-accent)]"
                   >
                     <Bot size={14} className="mt-0.5 shrink-0 text-[var(--primary)]" />
                     <button className="min-w-0 flex-1 text-left" onClick={() => openAgentDetail(agent.id)}>
@@ -263,13 +244,6 @@ export function AgentsPanel() {
                       onClick={() => openAgentDetail(agent.id)}
                     >
                       <Pencil size={13} />
-                    </button>
-                    <button
-                      className="mt-0.5 shrink-0 text-[var(--muted-foreground)] transition-colors hover:text-[var(--destructive)]"
-                      title={enabled ? "Disable agent" : "Enable agent"}
-                      onClick={() => toggleAgent.mutate(agent.id)}
-                    >
-                      {enabled ? <ToggleRight size={13} /> : <ToggleLeft size={13} />}
                     </button>
                   </div>
                 );
@@ -300,14 +274,10 @@ export function AgentsPanel() {
           <p className="text-[10px] text-[var(--muted-foreground)] px-1 py-2">No custom agents yet.</p>
         ) : (
           customAgents.map((agent) => {
-            const enabled = agent.enabled === "true";
             return (
               <div
                 key={agent.id}
-                className={cn(
-                  "flex items-start gap-2.5 rounded-lg p-2 transition-colors hover:bg-[var(--sidebar-accent)]",
-                  !enabled && "opacity-50",
-                )}
+                className="flex items-start gap-2.5 rounded-lg p-2 transition-colors hover:bg-[var(--sidebar-accent)]"
               >
                 <Sparkles size={14} className="mt-0.5 shrink-0 text-[var(--primary)]" />
                 <button className="min-w-0 flex-1 text-left" onClick={() => openAgentDetail(agent.id)}>
@@ -322,13 +292,6 @@ export function AgentsPanel() {
                   onClick={() => openAgentDetail(agent.id)}
                 >
                   <Pencil size={13} />
-                </button>
-                <button
-                  className="mt-0.5 shrink-0 text-[var(--muted-foreground)] transition-colors hover:text-[var(--destructive)]"
-                  title={enabled ? "Disable agent" : "Enable agent"}
-                  onClick={() => toggleAgent.mutate(agent.id)}
-                >
-                  {enabled ? <ToggleRight size={13} /> : <ToggleLeft size={13} />}
                 </button>
                 <button
                   className="mt-0.5 shrink-0 text-[var(--muted-foreground)] transition-colors hover:text-[var(--destructive)]"

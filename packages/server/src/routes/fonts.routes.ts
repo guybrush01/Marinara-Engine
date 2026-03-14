@@ -7,8 +7,9 @@ import { readdir } from "fs/promises";
 import { join, extname, basename } from "path";
 import { execFile } from "child_process";
 import { platform } from "os";
+import { DATA_DIR } from "../utils/data-dir.js";
 
-const FONTS_DIR = join(process.cwd(), "data", "fonts");
+const FONTS_DIR = join(DATA_DIR, "fonts");
 
 const FONT_EXTS = new Set([".ttf", ".otf", ".woff", ".woff2"]);
 

@@ -12,8 +12,9 @@ import { importSTPreset } from "./st-prompt.importer.js";
 import { importSTLorebook } from "./st-lorebook.importer.js";
 import { characters as charactersTable, personas as personasTable } from "../../db/schema/index.js";
 import { createCharactersStorage } from "../storage/characters.storage.js";
+import { DATA_DIR } from "../../utils/data-dir.js";
 
-const BG_DIR = join(process.cwd(), "data", "backgrounds");
+const BG_DIR = join(DATA_DIR, "backgrounds");
 const BG_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"]);
 
 // ─── Helpers ───
@@ -607,7 +608,7 @@ export async function runSTBulkImport(
   // Import personas
   if (options.personas) {
     const storage = createCharactersStorage(db);
-    const AVATAR_DIR = join(process.cwd(), "data", "avatars");
+    const AVATAR_DIR = join(DATA_DIR, "avatars");
     if (!existsSync(AVATAR_DIR)) {
       await mkdir(AVATAR_DIR, { recursive: true });
     }

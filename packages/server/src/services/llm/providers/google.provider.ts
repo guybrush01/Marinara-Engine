@@ -52,6 +52,7 @@ export class GoogleProvider extends BaseLLMProvider {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      ...(options.signal ? { signal: options.signal } : {}),
     });
 
     if (!response.ok) {

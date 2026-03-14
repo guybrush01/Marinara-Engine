@@ -7,6 +7,7 @@ import type { ExportEnvelope } from "@marinara-engine/shared";
 import { createCharactersStorage } from "../services/storage/characters.storage.js";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
+import { DATA_DIR } from "../utils/data-dir.js";
 
 export async function charactersRoutes(app: FastifyInstance) {
   const storage = createCharactersStorage(app.db);
@@ -85,7 +86,7 @@ export async function charactersRoutes(app: FastifyInstance) {
       }
     }
 
-    const avatarsDir = join(process.cwd(), "data", "avatars");
+    const avatarsDir = join(DATA_DIR, "avatars");
     await mkdir(avatarsDir, { recursive: true });
     const filename = `${id}.${ext}`;
     const filepath = join(avatarsDir, filename);
@@ -123,7 +124,7 @@ export async function charactersRoutes(app: FastifyInstance) {
     let base64 = body.avatar;
     if (base64.includes(",")) base64 = base64.split(",")[1]!;
     const filename = body.filename ?? `persona-${req.params.id}-${Date.now()}.png`;
-    const avatarsDir = join(process.cwd(), "data", "avatars");
+    const avatarsDir = join(DATA_DIR, "avatars");
     await mkdir(avatarsDir, { recursive: true });
     const filepath = join(avatarsDir, filename);
     await writeFile(filepath, Buffer.from(base64, "base64"));

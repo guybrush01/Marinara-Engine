@@ -124,7 +124,7 @@ export function ConnectionsPanel() {
                 isSelected && "ring-1 ring-sky-400/40 bg-sky-400/5",
               )}
             >
-              <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-blue-500 text-white shadow-sm">
+              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-blue-500 text-white shadow-sm">
                 <Link size={16} />
                 {isSelected && (
                   <div className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-sky-400 shadow-sm">
@@ -138,55 +138,61 @@ export function ConnectionsPanel() {
                   {conn.provider} • {conn.model || "No model set"}
                 </div>
               </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  updateConnection.mutate({ id: conn.id, useForRandom: !inRandomPool });
-                }}
-                className={cn(
-                  "rounded-lg p-1.5 transition-all active:scale-90",
-                  inRandomPool
-                    ? "bg-amber-400/15 text-amber-400"
-                    : "text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 hover:bg-amber-400/10 hover:text-amber-400",
-                )}
-                title={inRandomPool ? "In random pool (click to remove)" : "Add to random pool"}
-              >
-                <Shuffle size={13} />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  testConnection.mutate(conn.id);
-                }}
-                className="rounded-lg p-1.5 text-[var(--muted-foreground)] transition-all hover:bg-sky-400/10 active:scale-90"
-                title="Test connection"
-              >
-                {testConnection.isPending ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  selectConnection(conn.id);
-                }}
-                className={cn(
-                  "rounded-lg px-2 py-1 text-[10px] font-medium transition-all active:scale-95",
-                  isSelected
-                    ? "bg-sky-400/15 text-sky-400"
-                    : "bg-[var(--secondary)] text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 hover:bg-sky-400/10 hover:text-sky-400",
-                )}
-                title={isSelected ? "Active for this chat" : "Use for this chat"}
-              >
-                {isSelected ? "Active" : "Use"}
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteConnection.mutate(conn.id);
-                }}
-                className="rounded-lg p-1.5 opacity-0 transition-all hover:bg-[var(--destructive)]/15 group-hover:opacity-100 active:scale-90"
-              >
-                <Trash2 size={13} className="text-[var(--destructive)]" />
-              </button>
+              <div className="flex shrink-0 items-center gap-0.5">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateConnection.mutate({ id: conn.id, useForRandom: !inRandomPool });
+                  }}
+                  className={cn(
+                    "rounded-lg p-1.5 transition-all active:scale-90",
+                    inRandomPool
+                      ? "bg-amber-400/15 text-amber-400"
+                      : "text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 hover:bg-amber-400/10 hover:text-amber-400",
+                  )}
+                  title={inRandomPool ? "In random pool (click to remove)" : "Add to random pool"}
+                >
+                  <Shuffle size={13} />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    testConnection.mutate(conn.id);
+                  }}
+                  className="rounded-lg p-1.5 text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 transition-all hover:bg-sky-400/10 active:scale-90"
+                  title="Test connection"
+                >
+                  {testConnection.isPending ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <CheckCircle size={13} />
+                  )}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    selectConnection(conn.id);
+                  }}
+                  className={cn(
+                    "rounded-lg px-2 py-1 text-[10px] font-medium transition-all active:scale-95",
+                    isSelected
+                      ? "bg-sky-400/15 text-sky-400"
+                      : "bg-[var(--secondary)] text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 hover:bg-sky-400/10 hover:text-sky-400",
+                  )}
+                  title={isSelected ? "Active for this chat" : "Use for this chat"}
+                >
+                  {isSelected ? "Active" : "Use"}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteConnection.mutate(conn.id);
+                  }}
+                  className="rounded-lg p-1.5 opacity-0 transition-all hover:bg-[var(--destructive)]/15 group-hover:opacity-100 active:scale-90"
+                >
+                  <Trash2 size={13} className="text-[var(--destructive)]" />
+                </button>
+              </div>
             </div>
           );
         })}

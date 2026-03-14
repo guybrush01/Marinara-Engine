@@ -52,6 +52,9 @@ COPY --from=builder /app/packages/client/dist packages/client/dist
 # Ensure /app/data exists for runtime use (fonts, default backgrounds, db, uploads)
 RUN mkdir -p /app/data
 
+# Point the server at /app/data regardless of working directory
+ENV DATA_DIR=/app/data
+
 # The SQLite database + user uploads live in /app/data at runtime.
 # Mount a volume here for persistence.
 VOLUME /app/data
