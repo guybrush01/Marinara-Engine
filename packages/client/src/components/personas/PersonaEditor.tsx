@@ -25,7 +25,7 @@ import {
   X,
   Maximize2,
 } from "lucide-react";
-import { cn } from "../../lib/utils";
+import { cn, generateClientId } from "../../lib/utils";
 import { HelpTooltip } from "../ui/HelpTooltip";
 import { ColorPicker } from "../ui/ColorPicker";
 import { ExpandedTextarea } from "../ui/ExpandedTextarea";
@@ -896,7 +896,7 @@ function DescriptionTab({
   };
 
   const addAltDesc = () => {
-    updateAltDescs([...altDescs, { id: crypto.randomUUID(), label: "Extension", content: "", active: true }]);
+    updateAltDescs([...altDescs, { id: generateClientId(), label: "Extension", content: "", active: true }]);
   };
 
   const toggleAltDesc = (id: string) => {

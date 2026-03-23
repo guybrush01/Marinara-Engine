@@ -295,21 +295,21 @@ IMPORTANT RULES FOR COMMANDS:
 
 const now = () => new Date().toISOString();
 
+const MARI_AVATAR = "/sprites/mari/Mari_profile.png";
+
 export async function seedProfessorMari(db: DB) {
   const serialized = JSON.stringify(MARI_CHARACTER_DATA);
 
   // Check if Mari already exists
-  const existing = await db
-    .select()
-    .from(characters)
-    .where(eq(characters.id, PROFESSOR_MARI_ID));
+  const existing = await db.select().from(characters).where(eq(characters.id, PROFESSOR_MARI_ID));
 
   if (existing.length > 0) {
-    // Update her card data if it changed (e.g. after an app update)
-    if (existing[0]!.data !== serialized) {
+    // Update her card data and avatar if changed (e.g. after an app update)
+    const needsUpdate = existing[0]!.data !== serialized || existing[0]!.avatarPath !== MARI_AVATAR;
+    if (needsUpdate) {
       await db
         .update(characters)
-        .set({ data: serialized, updatedAt: now() })
+        .set({ data: serialized, avatarPath: MARI_AVATAR, updatedAt: now() })
         .where(eq(characters.id, PROFESSOR_MARI_ID));
       console.log("[seed] Updated built-in assistant: Professor Mari");
     }
@@ -319,7 +319,7 @@ export async function seedProfessorMari(db: DB) {
   await db.insert(characters).values({
     id: PROFESSOR_MARI_ID,
     data: serialized,
-    avatarPath: "/sprites/mari/Mari_wave.png",
+    avatarPath: MARI_AVATAR,
     spriteFolderPath: null,
     createdAt: now(),
     updatedAt: now(),

@@ -1,8 +1,9 @@
 // ──────────────────────────────────────────────
 // Reusable animated modal shell
+// Uses CSS animations instead of framer-motion to
+// avoid double-animation under React.StrictMode.
 // ──────────────────────────────────────────────
-import { useEffect, useRef, type ReactNode } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 
 interface ModalProps {
@@ -16,6 +17,20 @@ interface ModalProps {
 
 export function Modal({ open, onClose, title, children, width = "max-w-md" }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
+  // Track mounted state separately so we can play the exit animation
+  // before actually removing the DOM nodes.
+  const [mounted, setMounted] = useState(false);
+  const [animating, setAnimating] = useState<"enter" | "exit" | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      // Start enter animation on next frame so the DOM is present
+      requestAnimationFrame(() => setAnimating("enter"));
+    } else if (mounted) {
+      setAnimating("exit");
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close on Escape
   useEffect(() => {
@@ -27,54 +42,65 @@ export function Modal({ open, onClose, title, children, width = "max-w-md" }: Mo
     return () => document.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
+  // Remove from DOM after exit animation completes
+  const handleAnimationEnd = () => {
+    if (animating === "exit") {
+      setMounted(false);
+      setAnimating(null);
+    }
+  };
+
+  if (!mounted) return null;
+
+  const isEntering = animating === "enter";
+
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          ref={overlayRef}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-          onClick={(e) => {
-            if (e.target === overlayRef.current) onClose();
-          }}
-        >
-          {/* Backdrop */}
-          <motion.div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          />
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{
+        opacity: isEntering ? 1 : 0,
+        transition: "opacity 150ms ease-out",
+      }}
+      onTransitionEnd={handleAnimationEnd}
+      onClick={(e) => {
+        if (e.target === overlayRef.current) onClose();
+      }}
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        style={{
+          opacity: isEntering ? 1 : 0,
+          transition: "opacity 150ms ease-out",
+        }}
+      />
 
-          {/* Panel - OS Window style */}
-          <motion.div
-            className={`os-window relative flex w-full flex-col ${width} max-h-[90vh] shadow-2xl shadow-black/50`}
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ type: "spring", damping: 25, stiffness: 350 }}
+      {/* Panel - OS Window style */}
+      <div
+        className={`os-window relative flex w-full flex-col ${width} max-h-[90vh] shadow-2xl shadow-black/50`}
+        style={{
+          opacity: isEntering ? 1 : 0,
+          transform: isEntering ? "scale(1) translateY(0)" : "scale(0.97) translateY(6px)",
+          transition: "opacity 150ms ease-out, transform 150ms ease-out",
+        }}
+      >
+        {/* Pastel gradient title bar */}
+        <div className="pastel-gradient h-[0.1875rem]" />
+        {/* Header */}
+        <div className="shrink-0 flex items-center justify-between border-b border-[var(--y2k-purple)]/20 px-5 py-3.5">
+          <h2 className="text-sm font-semibold text-[var(--y2k-lavender)]">{title}</h2>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--y2k-pink)]"
           >
-            {/* Pastel gradient title bar */}
-            <div className="pastel-gradient h-[0.1875rem]" />
-            {/* Header */}
-            <div className="shrink-0 flex items-center justify-between border-b border-[var(--y2k-purple)]/20 px-5 py-3.5">
-              <h2 className="text-sm font-semibold text-[var(--y2k-lavender)]">{title}</h2>
-              <button
-                onClick={onClose}
-                className="rounded-lg p-1 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--y2k-pink)]"
-              >
-                <X size="1rem" />
-              </button>
-            </div>
+            <X size="1rem" />
+          </button>
+        </div>
 
-            {/* Content */}
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        {/* Content */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+      </div>
+    </div>
   );
 }

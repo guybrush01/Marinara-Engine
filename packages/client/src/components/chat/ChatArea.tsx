@@ -315,7 +315,10 @@ export function ChatArea() {
   }, [chat]);
   const spriteCharacterIds: string[] = chatMeta.spriteCharacterIds ?? [];
   const spritePosition: "left" | "right" = chatMeta.spritePosition ?? "left";
-  const spriteExpressions: Record<string, string> = useMemo(() => chatMeta.spriteExpressions ?? {}, [chatMeta.spriteExpressions]);
+  const spriteExpressions: Record<string, string> = useMemo(
+    () => chatMeta.spriteExpressions ?? {},
+    [chatMeta.spriteExpressions],
+  );
   const groupChatMode: string | undefined = chatCharIds.length > 1 ? (chatMeta.groupChatMode ?? "merged") : undefined;
 
   const streamingCharacterId = useChatStore((s) => s.streamingCharacterId);
@@ -737,7 +740,9 @@ export function ChatArea() {
 
             {/* Special thanks */}
             <p className="mt-1 max-w-xs text-center text-[0.625rem] leading-relaxed text-[var(--muted-foreground)]/40">
-              Special thanks to Kale, Tabris, GREGOR OVECH, Coins, Tacoman, Jorge, Promansis, Kitsumiro, Sheep, Pod042, Prolix, PlutoMayhem, Mezzeh, Kuc0, Exalted, Yang Best Girl, MidnightSleeper, Geechan, TheLonelyDevil, Artus, and you!
+              Special thanks to Kale, Tabris, GREGOR OVECH, Coins, Tacoman, Jorge, Promansis, Kitsumiro, Sheep, Pod042,
+              Prolix, PlutoMayhem, Mezzeh, Kuc0, Exalted, Yang Best Girl, MidnightSleeper, Geechan, TheLonelyDevil,
+              Artus, and you!
             </p>
 
             {/* Restart tutorial */}
@@ -797,13 +802,20 @@ export function ChatArea() {
             onOpenSettings={() => setSettingsOpen(true)}
             onOpenFiles={() => setFilesOpen(true)}
             onOpenGallery={() => setGalleryOpen(true)}
-            connectedChatName={chat?.connectedChatId ? (allChats ?? []).find((c: any) => c.id === chat.connectedChatId)?.name : undefined}
+            connectedChatName={
+              chat?.connectedChatId ? (allChats ?? []).find((c: any) => c.id === chat.connectedChatId)?.name : undefined
+            }
             onSwitchChat={chat?.connectedChatId ? () => setActiveChatId(chat.connectedChatId!) : undefined}
             sceneInfo={
               chatMeta.activeSceneChatId && (allChats ?? []).some((c: any) => c.id === chatMeta.activeSceneChatId)
                 ? { variant: "origin" as const, sceneChatId: chatMeta.activeSceneChatId }
                 : chatMeta.sceneStatus === "active"
-                  ? { variant: "scene" as const, sceneChatId: activeChatId, originChatId: chatMeta.sceneOriginChatId, description: chatMeta.sceneDescription }
+                  ? {
+                      variant: "scene" as const,
+                      sceneChatId: activeChatId,
+                      originChatId: chatMeta.sceneOriginChatId,
+                      description: chatMeta.sceneDescription,
+                    }
                   : undefined
             }
             onConcludeScene={chatMeta.sceneStatus === "active" ? concludeScene : undefined}
@@ -868,42 +880,46 @@ export function ChatArea() {
 
         {/* ── Outer flex for HUD ── */}
         <div className="flex flex-1 overflow-hidden">
-
           <div className="flex flex-1 flex-col overflow-hidden">
             {/* ── Header / Toolbar area ── */}
             <>
               {/* Desktop top bar */}
-                <div className="pointer-events-none relative z-40 hidden md:flex items-center px-4 py-2">
-                  {chat && chatMeta.enableAgents && (
-                    <div className="pointer-events-auto flex-1 overflow-x-auto">
-                      <RoleplayHUD
-                        chatId={chat.id}
-                        characterCount={chatCharIds.length}
-                        layout="top"
-                        onRetriggerTrackers={handleRerunTrackers}
-                        enabledAgentTypes={enabledAgentTypes}
-                        manualTrackers={!!chatMeta.manualTrackers}
-                      />
-                    </div>
-                  )}
-                  <div className="pointer-events-auto flex shrink-0 items-center gap-1.5 ml-auto">
-                    <ToolbarMenu>
-                      <SummaryButton chatId={chat?.id ?? null} summary={chatMeta.summary ?? null} />
-                      <WorldInfoButton chatId={chat?.id ?? null} />
+              <div className="pointer-events-none relative z-40 hidden md:flex items-center px-4 py-2">
+                {chat && chatMeta.enableAgents && (
+                  <div className="pointer-events-auto flex-1 overflow-x-auto">
+                    <RoleplayHUD
+                      chatId={chat.id}
+                      characterCount={chatCharIds.length}
+                      layout="top"
+                      onRetriggerTrackers={handleRerunTrackers}
+                      enabledAgentTypes={enabledAgentTypes}
+                      manualTrackers={!!chatMeta.manualTrackers}
+                    />
+                  </div>
+                )}
+                <div className="pointer-events-auto flex shrink-0 items-center gap-1.5 ml-auto">
+                  <ToolbarMenu>
+                    <SummaryButton chatId={chat?.id ?? null} summary={chatMeta.summary ?? null} />
+                    <WorldInfoButton chatId={chat?.id ?? null} />
+                    <RpToolbarButton
+                      icon={<FolderOpen size="0.875rem" />}
+                      title="Manage Chat Files"
+                      onClick={() => setFilesOpen(true)}
+                    />
+                    {expressionAgentEnabled && chatCharIds.length > 0 && (
                       <RpToolbarButton
-                        icon={<FolderOpen size="0.875rem" />}
-                        title="Manage Chat Files"
-                        onClick={() => setFilesOpen(true)}
+                        icon={<FlipHorizontal2 size="0.875rem" />}
+                        title={`Sprite: ${spritePosition} side`}
+                        onClick={handleToggleSpritePosition}
                       />
-                      {expressionAgentEnabled && chatCharIds.length > 0 && (
-                        <RpToolbarButton
-                          icon={<FlipHorizontal2 size="0.875rem" />}
-                          title={`Sprite: ${spritePosition} side`}
-                          onClick={handleToggleSpritePosition}
-                        />
-                      )}
-                      <RpToolbarButton icon={<Image size="0.875rem" />} title="Gallery" onClick={() => setGalleryOpen(true)} />
-                      {chat?.connectedChatId && (() => {
+                    )}
+                    <RpToolbarButton
+                      icon={<Image size="0.875rem" />}
+                      title="Gallery"
+                      onClick={() => setGalleryOpen(true)}
+                    />
+                    {chat?.connectedChatId &&
+                      (() => {
                         const linked = (allChats ?? []).find((c: any) => c.id === chat.connectedChatId);
                         return (
                           <RpToolbarButton
@@ -913,51 +929,90 @@ export function ChatArea() {
                           />
                         );
                       })()}
+                    <RpToolbarButton
+                      icon={<Settings2 size="0.875rem" />}
+                      title="Chat Settings"
+                      onClick={() => setSettingsOpen(true)}
+                    />
+                  </ToolbarMenu>
+                </div>
+              </div>
+              {/* Mobile top bar */}
+              <div className="pointer-events-auto relative z-40 flex flex-col w-full md:hidden">
+                {chat && chatMeta.enableAgents && (
+                  <div className="flex w-full items-center justify-between px-2 pt-2 pb-1">
+                    <RoleplayHUD
+                      chatId={chat.id}
+                      characterCount={chatCharIds.length}
+                      layout="top"
+                      onRetriggerTrackers={handleRerunTrackers}
+                      enabledAgentTypes={enabledAgentTypes}
+                      manualTrackers={!!chatMeta.manualTrackers}
+                      mobileCompact
+                    />
+                    <ToolbarMenu>
+                      <SummaryButton chatId={chat?.id ?? null} summary={chatMeta.summary ?? null} />
+                      <WorldInfoButton chatId={chat?.id ?? null} />
+                      <RpToolbarButton
+                        icon={<FolderOpen size="0.875rem" />}
+                        title="Manage Chat Files"
+                        onClick={() => setFilesOpen(true)}
+                        size="sm"
+                      />
+                      {expressionAgentEnabled && chatCharIds.length > 0 && (
+                        <RpToolbarButton
+                          icon={<FlipHorizontal2 size="0.875rem" />}
+                          title={`Sprite: ${spritePosition} side`}
+                          onClick={handleToggleSpritePosition}
+                          size="sm"
+                        />
+                      )}
+                      <RpToolbarButton
+                        icon={<Image size="0.875rem" />}
+                        title="Gallery"
+                        onClick={() => setGalleryOpen(true)}
+                        size="sm"
+                      />
+                      {chat?.connectedChatId &&
+                        (() => {
+                          const linked = (allChats ?? []).find((c: any) => c.id === chat.connectedChatId);
+                          return (
+                            <RpToolbarButton
+                              icon={<ArrowRightLeft size="0.875rem" />}
+                              title={linked ? `Switch to ${linked.name}` : "Connected chat"}
+                              onClick={() => setActiveChatId(chat.connectedChatId!)}
+                              size="sm"
+                            />
+                          );
+                        })()}
                       <RpToolbarButton
                         icon={<Settings2 size="0.875rem" />}
                         title="Chat Settings"
                         onClick={() => setSettingsOpen(true)}
+                        size="sm"
                       />
                     </ToolbarMenu>
                   </div>
-                </div>
-                {/* Mobile top bar */}
-                <div className="pointer-events-auto relative z-40 flex flex-col w-full md:hidden">
-                  {chat && chatMeta.enableAgents && (
-                    <div className="flex w-full items-center justify-between px-2 pt-2 pb-1">
-                      <RoleplayHUD
-                        chatId={chat.id}
-                        characterCount={chatCharIds.length}
-                        layout="top"
-                        onRetriggerTrackers={handleRerunTrackers}
-                        enabledAgentTypes={enabledAgentTypes}
-                        manualTrackers={!!chatMeta.manualTrackers}
-                        mobileCompact
+                )}
+                {chat && !chatMeta.enableAgents && (
+                  <div className="flex w-full items-center justify-end gap-1.5 px-2 pt-2 pb-1">
+                    <ToolbarMenu>
+                      <SummaryButton chatId={chat?.id ?? null} summary={chatMeta.summary ?? null} />
+                      <WorldInfoButton chatId={chat?.id ?? null} />
+                      <RpToolbarButton
+                        icon={<FolderOpen size="0.875rem" />}
+                        title="Manage Chat Files"
+                        onClick={() => setFilesOpen(true)}
+                        size="sm"
                       />
-                      <ToolbarMenu>
-                        <SummaryButton chatId={chat?.id ?? null} summary={chatMeta.summary ?? null} />
-                        <WorldInfoButton chatId={chat?.id ?? null} />
-                        <RpToolbarButton
-                          icon={<FolderOpen size="0.875rem" />}
-                          title="Manage Chat Files"
-                          onClick={() => setFilesOpen(true)}
-                          size="sm"
-                        />
-                        {expressionAgentEnabled && chatCharIds.length > 0 && (
-                          <RpToolbarButton
-                            icon={<FlipHorizontal2 size="0.875rem" />}
-                            title={`Sprite: ${spritePosition} side`}
-                            onClick={handleToggleSpritePosition}
-                            size="sm"
-                          />
-                        )}
-                        <RpToolbarButton
-                          icon={<Image size="0.875rem" />}
-                          title="Gallery"
-                          onClick={() => setGalleryOpen(true)}
-                          size="sm"
-                        />
-                        {chat?.connectedChatId && (() => {
+                      <RpToolbarButton
+                        icon={<Image size="0.875rem" />}
+                        title="Gallery"
+                        onClick={() => setGalleryOpen(true)}
+                        size="sm"
+                      />
+                      {chat?.connectedChatId &&
+                        (() => {
                           const linked = (allChats ?? []).find((c: any) => c.id === chat.connectedChatId);
                           return (
                             <RpToolbarButton
@@ -968,54 +1023,17 @@ export function ChatArea() {
                             />
                           );
                         })()}
-                        <RpToolbarButton
-                          icon={<Settings2 size="0.875rem" />}
-                          title="Chat Settings"
-                          onClick={() => setSettingsOpen(true)}
-                          size="sm"
-                        />
-                      </ToolbarMenu>
-                    </div>
-                  )}
-                  {chat && !chatMeta.enableAgents && (
-                    <div className="flex w-full items-center justify-end gap-1.5 px-2 pt-2 pb-1">
-                      <ToolbarMenu>
-                        <SummaryButton chatId={chat?.id ?? null} summary={chatMeta.summary ?? null} />
-                        <WorldInfoButton chatId={chat?.id ?? null} />
-                        <RpToolbarButton
-                          icon={<FolderOpen size="0.875rem" />}
-                          title="Manage Chat Files"
-                          onClick={() => setFilesOpen(true)}
-                          size="sm"
-                        />
-                        <RpToolbarButton
-                          icon={<Image size="0.875rem" />}
-                          title="Gallery"
-                          onClick={() => setGalleryOpen(true)}
-                          size="sm"
-                        />
-                        {chat?.connectedChatId && (() => {
-                          const linked = (allChats ?? []).find((c: any) => c.id === chat.connectedChatId);
-                          return (
-                            <RpToolbarButton
-                              icon={<ArrowRightLeft size="0.875rem" />}
-                              title={linked ? `Switch to ${linked.name}` : "Connected chat"}
-                              onClick={() => setActiveChatId(chat.connectedChatId!)}
-                              size="sm"
-                            />
-                          );
-                        })()}
-                        <RpToolbarButton
-                          icon={<Settings2 size="0.875rem" />}
-                          title="Chat Settings"
-                          onClick={() => setSettingsOpen(true)}
-                          size="sm"
-                        />
-                      </ToolbarMenu>
-                    </div>
-                  )}
-                </div>
-              </>
+                      <RpToolbarButton
+                        icon={<Settings2 size="0.875rem" />}
+                        title="Chat Settings"
+                        onClick={() => setSettingsOpen(true)}
+                        size="sm"
+                      />
+                    </ToolbarMenu>
+                  </div>
+                )}
+              </div>
+            </>
 
             {/* Combat Encounter Modal */}
             {encounterActive && <EncounterModal />}
@@ -1034,7 +1052,11 @@ export function ChatArea() {
                       disabled={isFetchingNextPage}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs font-medium text-white/70 backdrop-blur-sm transition-all hover:bg-white/10 hover:text-white/90 disabled:opacity-50"
                     >
-                      {isFetchingNextPage ? <Loader2 size="0.75rem" className="animate-spin" /> : <ChevronUp size="0.75rem" />}
+                      {isFetchingNextPage ? (
+                        <Loader2 size="0.75rem" className="animate-spin" />
+                      ) : (
+                        <ChevronUp size="0.75rem" />
+                      )}
                       Load More
                     </button>
                   </div>
@@ -1120,7 +1142,12 @@ export function ChatArea() {
             <div className="relative z-20">
               <div className="relative px-[12%] max-md:px-3">
                 {chatMeta.sceneStatus === "active" && (
-                  <EndSceneBar sceneChatId={activeChatId} originChatId={chatMeta.sceneOriginChatId} onConclude={concludeScene} onAbandon={abandonScene} />
+                  <EndSceneBar
+                    sceneChatId={activeChatId}
+                    originChatId={chatMeta.sceneOriginChatId}
+                    onConclude={concludeScene}
+                    onAbandon={abandonScene}
+                  />
                 )}
                 {combatAgentEnabled && (
                   <div className="flex justify-center py-1">
@@ -1172,8 +1199,6 @@ export function ChatArea() {
 
       {/* Agent thought bubbles (conversation only) */}
       {!isRoleplay && <AgentThoughtBubbles enabledAgentTypes={enabledAgentTypes} />}
-
-
 
       {/* Pinned gallery images */}
       <PinnedImageOverlay activeChatId={activeChatId} />
@@ -1449,8 +1474,8 @@ function WorldInfoButton({ chatId }: { chatId: string | null }) {
       >
         <Globe size="0.875rem" />
       </button>
-      {open && (
-        isMobile ? (
+      {open &&
+        (isMobile ? (
           createPortal(
             <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} />
@@ -1464,8 +1489,7 @@ function WorldInfoButton({ chatId }: { chatId: string | null }) {
           <div className="absolute right-0 top-full z-50 mt-2 w-[min(20rem,calc(100vw-2rem))] max-h-[60vh] overflow-y-auto rounded-xl border border-white/10 bg-black/90 p-3 shadow-2xl backdrop-blur-xl animate-message-in">
             {panelContent}
           </div>
-        )
-      )}
+        ))}
     </div>
   );
 }

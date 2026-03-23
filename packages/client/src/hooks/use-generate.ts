@@ -729,9 +729,11 @@ export function useGenerate() {
           }
         }
         // Only clean up global streaming state if this generation still
-        // "owns" it. If another generation started (different chatId),
-        // that generation now owns the state — don't clobber it.
-        const stillOwner = useChatStore.getState().streamingChatId === params.chatId;
+        // "owns" it. We check AbortController identity rather than chatId
+        // because two generations can target the same chat (e.g. autonomous
+        // + user send). The latest generation replaces the AbortController,
+        // so the superseded one knows it no longer owns the state.
+        const stillOwner = useChatStore.getState().abortController === abortController;
         if (stillOwner) {
           // Wait one frame so React renders the fetched messages before
           // removing the streaming overlay — prevents a visible flash.

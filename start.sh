@@ -79,9 +79,7 @@ if [ ! -d "packages/client/dist" ]; then
     pnpm build:client
 fi
 
-# ── Database schema ──
-echo "  [..] Syncing database schema..."
-pnpm db:push 2>/dev/null || true
+# Database migrations are handled automatically at server startup by runMigrations()
 
 # ── Start ──
 

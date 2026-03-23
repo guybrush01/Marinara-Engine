@@ -46,8 +46,10 @@ function isPrivateIP(ip: string): boolean {
 /**
  * Validate a URL string is safe for server-side requests (not targeting internal services).
  * Returns an error message if unsafe, or null if OK.
+ *
+ * @param allowPrivate - If true, skip private/loopback checks (for user-configured connections).
  */
-export function validateExternalUrl(url: string): string | null {
+export function validateExternalUrl(url: string, { allowPrivate = false } = {}): string | null {
   try {
     const parsed = new URL(url);
 
@@ -56,7 +58,7 @@ export function validateExternalUrl(url: string): string | null {
       return "Only http and https URLs are allowed";
     }
 
-    if (isPrivateOrReservedHost(parsed.hostname)) {
+    if (!allowPrivate && isPrivateOrReservedHost(parsed.hostname)) {
       return "URLs targeting private, loopback, or link-local addresses are not allowed";
     }
 

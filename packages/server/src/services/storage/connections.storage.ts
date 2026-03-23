@@ -52,6 +52,7 @@ export function createConnectionsStorage(db: DB) {
         useForRandom: String(input.useForRandom ?? false),
         enableCaching: String(input.enableCaching ?? false),
         embeddingModel: input.embeddingModel ?? "",
+        embeddingConnectionId: input.embeddingConnectionId ?? null,
         createdAt: timestamp,
         updatedAt: timestamp,
       });
@@ -81,6 +82,9 @@ export function createConnectionsStorage(db: DB) {
       if (data.embeddingModel !== undefined) {
         updateFields.embeddingModel = data.embeddingModel;
       }
+      if (data.embeddingConnectionId !== undefined) {
+        updateFields.embeddingConnectionId = data.embeddingConnectionId;
+      }
       await db.update(apiConnections).set(updateFields).where(eq(apiConnections.id, id));
       return this.getById(id);
     },
@@ -103,6 +107,7 @@ export function createConnectionsStorage(db: DB) {
         useForRandom: source.useForRandom,
         enableCaching: source.enableCaching,
         embeddingModel: source.embeddingModel,
+        embeddingConnectionId: source.embeddingConnectionId,
         createdAt: timestamp,
         updatedAt: timestamp,
       });

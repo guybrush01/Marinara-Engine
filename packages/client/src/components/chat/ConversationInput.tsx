@@ -51,16 +51,13 @@ async function convertToPng(blob: Blob): Promise<{ blob: Blob; dataUrl: string }
     }
     ctx.drawImage(bitmap, 0, 0);
     pngBlob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob(
-        (blobResult) => {
-          if (blobResult) {
-            resolve(blobResult);
-          } else {
-            reject(new Error("Failed to convert canvas to PNG blob"));
-          }
-        },
-        "image/png",
-      );
+      canvas.toBlob((blobResult) => {
+        if (blobResult) {
+          resolve(blobResult);
+        } else {
+          reject(new Error("Failed to convert canvas to PNG blob"));
+        }
+      }, "image/png");
     });
   }
 

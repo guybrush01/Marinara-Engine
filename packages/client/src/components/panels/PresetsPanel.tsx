@@ -221,11 +221,11 @@ export function PresetsPanel() {
       )}
 
       {/* Choice selection modal */}
-      {choiceModalPresetId && activeChat && (
+      {activeChat && (
         <ChoiceSelectionModal
           open={!!choiceModalPresetId}
           onClose={() => setChoiceModalPresetId(null)}
-          presetId={choiceModalPresetId}
+          presetId={activePresetId ?? choiceModalPresetId}
           chatId={activeChat.id}
           existingChoices={
             typeof activeChat.metadata === "string"

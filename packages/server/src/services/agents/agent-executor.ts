@@ -552,12 +552,22 @@ function buildAgentMessages(systemPrompt: string, context: AgentContext, agentTy
 
   // ── 2. Chat history as proper multi-turn messages ──
   if (context.recentMessages.length > 0) {
-    for (const msg of context.recentMessages) {
+    // Only attach committed tracker state to the last 3 assistant messages to save tokens
+    const assistantIndices: number[] = [];
+    for (let i = 0; i < context.recentMessages.length; i++) {
+      if (context.recentMessages[i]!.role === "assistant" && context.recentMessages[i]!.gameState) {
+        assistantIndices.push(i);
+      }
+    }
+    const trackerEligible = new Set(assistantIndices.slice(-3));
+
+    for (let msgIdx = 0; msgIdx < context.recentMessages.length; msgIdx++) {
+      const msg = context.recentMessages[msgIdx]!;
       const role: "user" | "assistant" = msg.role === "assistant" ? "assistant" : "user";
       let content = msg.content.slice(0, 2000);
 
-      // Append committed tracker data to assistant messages
-      if (msg.gameState) {
+      // Append committed tracker data only to the last 3 assistant messages
+      if (msg.gameState && trackerEligible.has(msgIdx)) {
         const gs = msg.gameState;
         const trackerSummary: Record<string, unknown> = {};
         if (gs.date || gs.time || gs.location || gs.weather || gs.temperature) {

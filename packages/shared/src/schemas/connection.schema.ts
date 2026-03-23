@@ -25,6 +25,7 @@ export const createConnectionSchema = z.object({
   useForRandom: z.boolean().default(false),
   enableCaching: z.boolean().default(false),
   embeddingModel: z.string().default(""),
+  embeddingConnectionId: z.string().nullable().default(null),
 });
 
 export type CreateConnectionInput = z.infer<typeof createConnectionSchema>;

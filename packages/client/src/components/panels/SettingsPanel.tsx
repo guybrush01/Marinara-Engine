@@ -2,7 +2,7 @@
 // Panel: Settings (polished)
 // ──────────────────────────────────────────────
 import { useUIStore, type CustomTheme, type InstalledExtension, type VisualTheme } from "../../stores/ui.store";
-import { cn } from "../../lib/utils";
+import { cn, generateClientId } from "../../lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api-client";
 import React, { useRef, useState, useCallback, useEffect } from "react";
@@ -856,7 +856,7 @@ function ThemesSettings() {
       if (file.name.endsWith(".json")) {
         const parsed = JSON.parse(text);
         const theme: CustomTheme = {
-          id: crypto.randomUUID(),
+          id: generateClientId(),
           name: parsed.name ?? file.name.replace(/\.json$/, ""),
           css: parsed.css ?? "",
           installedAt: new Date().toISOString(),
@@ -865,7 +865,7 @@ function ThemesSettings() {
         addCustomTheme(theme);
       } else {
         const theme: CustomTheme = {
-          id: crypto.randomUUID(),
+          id: generateClientId(),
           name: file.name.replace(/\.css$/, ""),
           css: text,
           installedAt: new Date().toISOString(),
@@ -1138,7 +1138,7 @@ function ExtensionsSettings() {
       if (file.name.endsWith(".json")) {
         const parsed = JSON.parse(text);
         const ext: InstalledExtension = {
-          id: crypto.randomUUID(),
+          id: generateClientId(),
           name: parsed.name ?? file.name.replace(/\.json$/, ""),
           description: parsed.description ?? "",
           css: parsed.css ?? undefined,
@@ -1148,7 +1148,7 @@ function ExtensionsSettings() {
         addExtension(ext);
       } else if (file.name.endsWith(".css")) {
         const ext: InstalledExtension = {
-          id: crypto.randomUUID(),
+          id: generateClientId(),
           name: file.name.replace(/\.css$/, ""),
           description: "CSS extension imported from file",
           css: text,

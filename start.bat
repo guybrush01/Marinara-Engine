@@ -80,9 +80,7 @@ if not exist "packages\client\dist" (
     call pnpm build:client
 )
 
-:: Push database schema
-echo  [..] Syncing database schema...
-call pnpm db:push 2>nul
+:: Database migrations are handled automatically at server startup by runMigrations()
 
 :: Load .env if present (respects user overrides)
 if not exist .env goto :skip_env

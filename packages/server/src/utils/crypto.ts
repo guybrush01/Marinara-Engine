@@ -42,10 +42,7 @@ function getEncryptionKey(): Buffer {
   const newKey = randomBytes(32);
   mkdirSync(DATA_DIR, { recursive: true });
   writeFileSync(keyPath, newKey.toString("hex") + "\n", { mode: 0o600 });
-  console.log(
-    "[CRYPTO] No ENCRYPTION_KEY found — generated and saved to",
-    keyPath,
-  );
+  console.log("[CRYPTO] No ENCRYPTION_KEY found — generated and saved to", keyPath);
   cachedKey = newKey;
   return cachedKey;
 }
@@ -68,11 +65,17 @@ export function decryptApiKey(encrypted: string): string {
   const key = getEncryptionKey();
   const [ivHex, encHex, authTagHex] = encrypted.split(":");
   if (!ivHex || !encHex || !authTagHex) return "";
-  const iv = Buffer.from(ivHex, "hex");
-  const authTag = Buffer.from(authTagHex, "hex");
-  const decipher = createDecipheriv(ALGORITHM, key, iv);
-  decipher.setAuthTag(authTag);
-  let decrypted = decipher.update(encHex, "hex", "utf8");
-  decrypted += decipher.final("utf8");
-  return decrypted;
+  try {
+    const iv = Buffer.from(ivHex, "hex");
+    const authTag = Buffer.from(authTagHex, "hex");
+    const decipher = createDecipheriv(ALGORITHM, key, iv);
+    decipher.setAuthTag(authTag);
+    let decrypted = decipher.update(encHex, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+    return decrypted;
+  } catch {
+    // Key was encrypted with a different encryption key that no longer exists
+    console.warn("[CRYPTO] Failed to decrypt API key — encryption key may have changed. Please re-enter the API key.");
+    return "";
+  }
 }

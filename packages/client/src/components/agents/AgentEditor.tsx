@@ -509,7 +509,7 @@ export function AgentEditor() {
           <FieldGroup
             label="Context Size"
             icon={<Clock size="0.875rem" className="text-[var(--y2k-pink)]" />}
-            help="How many recent chat messages this agent receives as context. More messages = more context but higher token usage. Leave blank for the default (20 messages)."
+            help="How many recent chat messages this agent receives as context. More messages = more context but higher token usage. Leave blank for the default (8 messages)."
           >
             <div className="flex items-center gap-3">
               <input
@@ -522,7 +522,7 @@ export function AgentEditor() {
                   setLocalContextSize(v === "" ? "" : Math.max(1, Math.min(200, parseInt(v) || 1)));
                   markDirty();
                 }}
-                placeholder="20"
+                placeholder="8"
                 className="w-28 rounded-xl bg-[var(--secondary)] px-3 py-2.5 text-sm tabular-nums ring-1 ring-[var(--border)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
               />
               <span className="text-[0.6875rem] text-[var(--muted-foreground)]">messages</span>

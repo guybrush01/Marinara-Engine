@@ -15,6 +15,7 @@ export default defineConfig({
     "./src/db/schema/custom-tools.ts",
     "./src/db/schema/game-state.ts",
     "./src/db/schema/regex-scripts.ts",
+    "./src/db/schema/gallery.ts",
   ],
   out: "./src/db/migrations",
   dialect: "sqlite",

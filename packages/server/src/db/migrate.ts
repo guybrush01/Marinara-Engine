@@ -377,6 +377,11 @@ const COLUMN_MIGRATIONS: ColumnMigration[] = [
     column: "connected_chat_id",
     definition: "TEXT",
   },
+  {
+    table: "api_connections",
+    column: "embedding_connection_id",
+    definition: "TEXT",
+  },
 ];
 
 export async function runMigrations(db: DB) {

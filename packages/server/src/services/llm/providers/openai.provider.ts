@@ -16,7 +16,7 @@ import {
  * Models that ONLY support the Responses API (`/responses`) and not Chat Completions.
  * Matching is case-insensitive.
  */
-const RESPONSES_ONLY_PREFIXES = ["gpt-5.4-pro", "codex-"];
+const RESPONSES_ONLY_PREFIXES = ["gpt-5.4", "codex-"];
 const RESPONSES_ONLY_SUFFIXES = ["-codex", "-codex-max", "-codex-mini"];
 
 /**
@@ -559,6 +559,24 @@ export class OpenAIProvider extends BaseLLMProvider {
     if (!options.stream) {
       // Non-streaming: parse the full response
       const json = (await response.json()) as Record<string, unknown>;
+      // Extract reasoning summaries for non-streaming
+      if (options.onThinking) {
+        const output = json.output as Array<Record<string, unknown>> | undefined;
+        if (output) {
+          for (const item of output) {
+            if (item.type === "reasoning") {
+              const summary = item.summary as Array<Record<string, unknown>> | undefined;
+              if (summary) {
+                for (const part of summary) {
+                  if (part.type === "summary_text" && typeof part.text === "string") {
+                    options.onThinking(part.text);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
       const text = this.extractResponsesText(json);
       if (text) yield text;
       return this.extractResponsesUsage(json);
@@ -662,6 +680,24 @@ export class OpenAIProvider extends BaseLLMProvider {
     if (!useStream) {
       // Non-streaming: parse the full response
       const json = (await response.json()) as Record<string, unknown>;
+      // Extract reasoning summaries
+      if (options.onThinking) {
+        const output = json.output as Array<Record<string, unknown>> | undefined;
+        if (output) {
+          for (const item of output) {
+            if (item.type === "reasoning") {
+              const summary = item.summary as Array<Record<string, unknown>> | undefined;
+              if (summary) {
+                for (const part of summary) {
+                  if (part.type === "summary_text" && typeof part.text === "string") {
+                    options.onThinking(part.text);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
       return this.parseResponsesResult(json);
     }
 

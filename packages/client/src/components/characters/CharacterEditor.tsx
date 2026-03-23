@@ -130,6 +130,9 @@ export function CharacterEditor() {
     try {
       await updateCharacter.mutateAsync({ id: characterId, data: formData as unknown as Record<string, unknown> });
       setDirty(false);
+    } catch (err: any) {
+      console.error("[CharacterEditor] Save failed:", err);
+      alert(err?.message ?? "Failed to save character. Check the console for details.");
     } finally {
       setSaving(false);
     }

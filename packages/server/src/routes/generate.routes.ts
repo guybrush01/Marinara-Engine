@@ -401,9 +401,29 @@ export async function generateRoutes(app: FastifyInstance) {
             .map((m) => m.content)
             .join("\n");
           if (recentMsgs.trim()) {
-            const embeddingModel = conn.embeddingModel as string | undefined;
+            // Use a dedicated embedding connection if configured:
+            // Priority: chat-level override → connection's embeddingConnectionId → same connection
+            const embeddingConnId =
+              (chatMeta.embeddingConnectionId as string | undefined) ||
+              (conn.embeddingConnectionId as string | undefined);
+            let embedConn = conn;
+            let embedBaseUrl = baseUrl;
+            if (embeddingConnId) {
+              const ec = await connections.getWithKey(embeddingConnId);
+              if (ec) {
+                embedConn = ec;
+                embedBaseUrl = resolveBaseUrl(ec);
+              }
+            }
+            const embeddingModel =
+              (embedConn.embeddingModel as string | undefined) ||
+              (conn.embeddingModel as string | undefined);
             if (embeddingModel) {
-              const embeddingProvider = createLLMProvider(conn.provider, baseUrl, conn.apiKey);
+              const embeddingProvider = createLLMProvider(
+                embedConn.provider as string,
+                embedBaseUrl,
+                embedConn.apiKey as string,
+              );
               const embeddings = await embeddingProvider.embed([recentMsgs], embeddingModel);
               chatContextEmbedding = embeddings[0] ?? null;
             }
@@ -1121,11 +1141,14 @@ export async function generateRoutes(app: FastifyInstance) {
         if (chatParams.verbosity !== undefined) verbosity = chatParams.verbosity as typeof verbosity;
       }
 
-      // Resolve "maximum" reasoning effort to the highest level for the current model
+      // Resolve "maximum" reasoning effort to the highest level for the current model.
+      // Only GPT-5.4 variants support "xhigh" — all others get "high".
       let resolvedEffort: "low" | "medium" | "high" | "xhigh" | null =
         reasoningEffort !== "maximum" ? reasoningEffort : null;
       if (reasoningEffort === "maximum") {
-        resolvedEffort = "xhigh";
+        const modelLower = (conn.model ?? "").toLowerCase();
+        const supportsXhigh = modelLower.startsWith("gpt-5.4");
+        resolvedEffort = supportsXhigh ? "xhigh" : "high";
       }
 
       // When reasoning effort is set, enable thinking so thoughts are captured/displayed
@@ -1545,11 +1568,9 @@ export async function generateRoutes(app: FastifyInstance) {
       const gameState = latestGameState ? parseGameStateRow(latestGameState as Record<string, unknown>) : null;
 
       // Build base agent context (without mainResponse — that comes after generation)
-      // Use the maximum contextSize requested by any enabled agent (default 20)
+      // Use the maximum contextSize requested by any enabled agent (default 8)
       const agentContextSize =
-        resolvedAgents.length > 0
-          ? Math.max(...resolvedAgents.map((a) => (a.settings.contextSize as number) || 20))
-          : 20;
+        resolvedAgents.length > 0 ? Math.max(...resolvedAgents.map((a) => (a.settings.contextSize as number) || 8)) : 8;
       const agentSlice = chatMessages.slice(-agentContextSize);
 
       // Batch-fetch committed game state snapshots for assistant messages in the agent context

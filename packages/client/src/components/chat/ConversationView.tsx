@@ -14,6 +14,7 @@ import { useAutonomousMessaging } from "../../hooks/use-autonomous-messaging";
 import { useChat, chatKeys } from "../../hooks/use-chats";
 import { characterKeys } from "../../hooks/use-characters";
 import { api } from "../../lib/api-client";
+import { generateClientId } from "../../lib/utils";
 import type { CharacterMap } from "./ChatArea";
 import type { Message } from "@marinara-engine/shared";
 
@@ -158,7 +159,7 @@ export function ConversationView({
       }
       // Show toast notification
       clearTimeout(notificationTimerRef.current);
-      setNotification({ name, id: crypto.randomUUID() });
+      setNotification({ name, id: generateClientId() });
       notificationTimerRef.current = setTimeout(() => setNotification(null), 5000);
     },
     [chatId, characterMap],
@@ -170,11 +171,11 @@ export function ConversationView({
     handleAutonomousMessage,
   );
 
-  // Generate schedules on first render for this chat
+  // Generate schedules on first render for this chat (only if autonomous messaging is enabled)
   const schedulesInitRef = useRef<string | null>(null);
   useEffect(() => {
     // Wait until character IDs are loaded before calling ensureSchedules
-    if (!chatId || chatCharIds.length === 0) return;
+    if (!chatId || chatCharIds.length === 0 || !autonomousEnabled) return;
     if (schedulesInitRef.current === chatId) return;
     schedulesInitRef.current = chatId;
     ensureSchedules(chatCharIds).then(() => {
@@ -183,7 +184,7 @@ export function ConversationView({
       // Refresh chat data so settings drawer picks up the new schedules
       qc.invalidateQueries({ queryKey: chatKeys.detail(chatId) });
     });
-  }, [chatId, chatCharIds, ensureSchedules, qc]);
+  }, [chatId, chatCharIds, autonomousEnabled, ensureSchedules, qc]);
 
   // ── Periodic status refresh (every 60s) ──
   // Keeps status dots in sync with the character's schedule regardless of autonomous messaging

@@ -534,7 +534,7 @@ export const ConversationMessage = memo(function ConversationMessage({
           )}
         >
           <MsgAction icon={copied ? "✓" : <Copy size="0.75rem" />} onClick={handleCopy} title="Copy" />
-          <MsgAction icon={<Pencil size="0.75rem" />} onClick={startEditing} title="Edit" />
+          <MsgAction icon={<Pencil size="0.75rem" />} onClick={onEditClick ?? startEditing} title="Edit" />
           {!isUser && (
             <MsgAction
               icon={<RefreshCw size="0.75rem" />}

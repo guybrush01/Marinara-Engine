@@ -21,6 +21,8 @@ export const apiConnections = sqliteTable("api_connections", {
   enableCaching: text("enable_caching").notNull().default("false"),
   /** Model to use for embedding generation (e.g. text-embedding-3-small) */
   embeddingModel: text("embedding_model"),
+  /** Optional: use a different connection for embeddings */
+  embeddingConnectionId: text("embedding_connection_id"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 });

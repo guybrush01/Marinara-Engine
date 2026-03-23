@@ -6,6 +6,7 @@ import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } fr
 import { useUIStore } from "../../stores/ui.store";
 import {
   useConnection,
+  useConnections,
   useUpdateConnection,
   useDeleteConnection,
   useTestConnection,
@@ -60,6 +61,7 @@ export function ConnectionEditor() {
   const testConnection = useTestConnection();
   const testMessage = useTestMessage();
   const fetchModels = useFetchModels();
+  const { data: allConnections } = useConnections();
 
   const [dirty, setDirty] = useState(false);
   const setEditorDirty = useUIStore((s) => s.setEditorDirty);
@@ -79,6 +81,7 @@ export function ConnectionEditor() {
   const [localMaxContext, setLocalMaxContext] = useState(128000);
   const [localEnableCaching, setLocalEnableCaching] = useState(false);
   const [localEmbeddingModel, setLocalEmbeddingModel] = useState("");
+  const [localEmbeddingConnectionId, setLocalEmbeddingConnectionId] = useState("");
 
   // Test results
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; latencyMs: number } | null>(null);
@@ -124,6 +127,7 @@ export function ConnectionEditor() {
     setLocalMaxContext(Number(c.maxContext) || 128000);
     setLocalEnableCaching(c.enableCaching === "true" || c.enableCaching === true);
     setLocalEmbeddingModel((c.embeddingModel as string) ?? "");
+    setLocalEmbeddingConnectionId((c.embeddingConnectionId as string) ?? "");
     setDirty(false);
     setSaveError(null);
     setTestResult(null);
@@ -181,6 +185,7 @@ export function ConnectionEditor() {
       maxContext: localMaxContext,
       enableCaching: localEnableCaching,
       embeddingModel: localEmbeddingModel,
+      embeddingConnectionId: localEmbeddingConnectionId || null,
     };
     // Only send API key if user typed a new one
     if (localApiKey.trim()) {
@@ -204,6 +209,7 @@ export function ConnectionEditor() {
     localMaxContext,
     localEnableCaching,
     localEmbeddingModel,
+    localEmbeddingConnectionId,
     updateConnection,
   ]);
 
@@ -873,6 +879,37 @@ export function ConnectionEditor() {
                 Used for lorebook semantic search. Entries matching by meaning (not just keywords) will be included in
                 the prompt.
               </p>
+
+              {/* Embedding Connection Override */}
+              <div className="mt-3 pt-3 border-t border-[var(--border)]">
+                <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-1.5">
+                  Embedding Connection
+                </label>
+                <select
+                  value={localEmbeddingConnectionId}
+                  onChange={(e) => {
+                    setLocalEmbeddingConnectionId(e.target.value);
+                    markDirty();
+                  }}
+                  className="w-full rounded-xl bg-[var(--secondary)] px-3 py-2.5 text-sm ring-1 ring-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+                >
+                  <option value="">Same as this connection</option>
+                  {(allConnections ?? [])
+                    .filter(
+                      (c: Record<string, unknown>) => c.id !== connectionDetailId && c.provider !== "image_generation",
+                    )
+                    .map((c: Record<string, unknown>) => (
+                      <option key={c.id as string} value={c.id as string}>
+                        {c.name as string}
+                        {c.embeddingModel ? ` (${c.embeddingModel})` : ""}
+                      </option>
+                    ))}
+                </select>
+                <p className="mt-1 text-[0.625rem] text-[var(--muted-foreground)]">
+                  Use a different connection&apos;s API key and base URL for embeddings. The embedding model name above
+                  will still be used unless the chosen connection has its own embedding model configured.
+                </p>
+              </div>
             </FieldGroup>
           )}
 

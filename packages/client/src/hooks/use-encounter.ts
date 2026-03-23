@@ -133,11 +133,12 @@ export function useEncounter() {
         }
         store.addLogEntry(fullAction, r.narrative || "Action resolved");
 
-        // Update stats
+        // Update stats — defensively default to current state if AI omitted fields
+        const currentState = useEncounterStore.getState();
         store.updateCombat({
-          party: r.combatStats.party,
-          enemies: r.combatStats.enemies,
-          playerActions: r.playerActions,
+          party: r.combatStats?.party ?? currentState.party,
+          enemies: r.combatStats?.enemies ?? currentState.enemies,
+          playerActions: r.playerActions ?? currentState.playerActions,
           enemyActions: r.enemyActions || [],
           partyActions: r.partyActions || [],
           narrative: r.narrative || "",
