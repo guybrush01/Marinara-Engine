@@ -234,6 +234,7 @@ export function PersonasPanel() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (!confirm(`Delete "${persona.name}"? This cannot be undone.`)) return;
                     deletePersona.mutate(persona.id);
                   }}
                   className="rounded-lg p-1.5 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--destructive)]/10 hover:text-[var(--destructive)]"

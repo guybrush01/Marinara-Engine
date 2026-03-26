@@ -980,6 +980,41 @@ export async function generateRoutes(app: FastifyInstance) {
         const isMariChat = characterIds.includes(PROFESSOR_MARI_ID);
         if (isMariChat) {
           conversationSystemPrompt += "\n\n" + MARI_ASSISTANT_PROMPT;
+
+          // Inject available characters & personas so Mari can answer questions about them
+          try {
+            const allChars = await chars.list();
+            const allPersonasList = await chars.listPersonas();
+
+            if (allChars.length > 0) {
+              const charSummaries = allChars
+                .filter((c: any) => c.id !== PROFESSOR_MARI_ID)
+                .map((c: any) => {
+                  const d = typeof c.data === "string" ? JSON.parse(c.data) : c.data;
+                  const parts = [`Name: ${d.name}`];
+                  if (d.description) parts.push(`Description: ${d.description}`);
+                  if (d.personality) parts.push(`Personality: ${d.personality}`);
+                  if (d.scenario) parts.push(`Scenario: ${d.scenario}`);
+                  return parts.join("\n");
+                });
+              if (charSummaries.length > 0) {
+                conversationSystemPrompt += `\n\n<available_characters>\nThe user has ${charSummaries.length} character(s) in their library. You can reference these when helping the user:\n\n${charSummaries.join("\n---\n")}\n</available_characters>`;
+              }
+            }
+
+            if (allPersonasList.length > 0) {
+              const personaSummaries = allPersonasList.map((p: any) => {
+                const parts = [`Name: ${p.name}`];
+                if (p.description) parts.push(`Description: ${p.description}`);
+                if (p.personality) parts.push(`Personality: ${p.personality}`);
+                if (p.appearance) parts.push(`Appearance: ${p.appearance}`);
+                return parts.join("\n");
+              });
+              conversationSystemPrompt += `\n\n<available_personas>\nThe user has ${personaSummaries.length} persona(s):\n\n${personaSummaries.join("\n---\n")}\n</available_personas>`;
+            }
+          } catch {
+            // Non-critical — continue without character/persona context
+          }
         }
 
         // Build the context injection (last user-role message before generation)

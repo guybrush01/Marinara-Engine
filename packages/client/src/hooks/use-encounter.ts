@@ -12,7 +12,43 @@ import type {
   EncounterActionResponse,
   EncounterSummaryResponse,
   EncounterSettings,
+  CombatPartyMember,
+  CombatEnemy,
 } from "@marinara-engine/shared";
+
+/** Ensure each party member has all required numeric/string fields so components don't crash. */
+function sanitizeParty(arr: unknown[], fallback: CombatPartyMember[]): CombatPartyMember[] {
+  return arr.map((raw, i) => {
+    if (!raw || typeof raw !== "object") return fallback[i] ?? fallback[0];
+    const m = raw as Record<string, unknown>;
+    return {
+      name: typeof m.name === "string" && m.name ? m.name : fallback[i]?.name ?? "Unknown",
+      hp: typeof m.hp === "number" ? m.hp : fallback[i]?.hp ?? 0,
+      maxHp: typeof m.maxHp === "number" && m.maxHp > 0 ? m.maxHp : fallback[i]?.maxHp ?? 1,
+      attacks: Array.isArray(m.attacks) ? m.attacks : fallback[i]?.attacks ?? [],
+      items: Array.isArray(m.items) ? m.items : fallback[i]?.items ?? [],
+      statuses: Array.isArray(m.statuses) ? m.statuses : fallback[i]?.statuses ?? [],
+      isPlayer: typeof m.isPlayer === "boolean" ? m.isPlayer : fallback[i]?.isPlayer ?? false,
+    } satisfies CombatPartyMember;
+  });
+}
+
+/** Ensure each enemy has all required numeric/string fields so components don't crash. */
+function sanitizeEnemies(arr: unknown[], fallback: CombatEnemy[]): CombatEnemy[] {
+  return arr.map((raw, i) => {
+    if (!raw || typeof raw !== "object") return fallback[i] ?? fallback[0];
+    const m = raw as Record<string, unknown>;
+    return {
+      name: typeof m.name === "string" && m.name ? m.name : fallback[i]?.name ?? "Enemy",
+      hp: typeof m.hp === "number" ? m.hp : fallback[i]?.hp ?? 0,
+      maxHp: typeof m.maxHp === "number" && m.maxHp > 0 ? m.maxHp : fallback[i]?.maxHp ?? 1,
+      attacks: Array.isArray(m.attacks) ? m.attacks : fallback[i]?.attacks ?? [],
+      statuses: Array.isArray(m.statuses) ? m.statuses : fallback[i]?.statuses ?? [],
+      description: typeof m.description === "string" ? m.description : fallback[i]?.description ?? "",
+      sprite: typeof m.sprite === "string" ? m.sprite : fallback[i]?.sprite ?? "",
+    } satisfies CombatEnemy;
+  });
+}
 
 export function useEncounter() {
   const qc = useQueryClient();
@@ -113,14 +149,16 @@ export function useEncounter() {
 
         // Build sequential log entries
         const logs: Array<{ message: string; type: string }> = [];
-        if (r.enemyActions) {
+        if (Array.isArray(r.enemyActions)) {
           for (const ea of r.enemyActions) {
-            logs.push({ message: `${ea.enemyName}: ${ea.action}`, type: "enemy-action" });
+            if (ea?.enemyName && ea?.action)
+              logs.push({ message: `${ea.enemyName}: ${ea.action}`, type: "enemy-action" });
           }
         }
-        if (r.partyActions) {
+        if (Array.isArray(r.partyActions)) {
           for (const pa of r.partyActions) {
-            logs.push({ message: `${pa.memberName}: ${pa.action}`, type: "party-action" });
+            if (pa?.memberName && pa?.action)
+              logs.push({ message: `${pa.memberName}: ${pa.action}`, type: "party-action" });
           }
         }
         if (r.narrative) {
@@ -140,11 +178,18 @@ export function useEncounter() {
         }
         store.addLogEntry(fullAction, r.narrative || "Action resolved");
 
-        // Update stats — defensively default to current state if AI omitted fields
+        // Update stats — defensively sanitize AI data, falling back to current state
         const currentState = useEncounterStore.getState();
+        const newParty = Array.isArray(r.combatStats?.party)
+          ? sanitizeParty(r.combatStats.party, currentState.party)
+          : currentState.party;
+        const newEnemies = Array.isArray(r.combatStats?.enemies)
+          ? sanitizeEnemies(r.combatStats.enemies, currentState.enemies)
+          : currentState.enemies;
+
         store.updateCombat({
-          party: r.combatStats?.party ?? currentState.party,
-          enemies: r.combatStats?.enemies ?? currentState.enemies,
+          party: newParty,
+          enemies: newEnemies,
           playerActions: r.playerActions ?? currentState.playerActions,
           enemyActions: r.enemyActions || [],
           partyActions: r.partyActions || [],

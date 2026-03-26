@@ -7,6 +7,20 @@ import { cn } from "../../lib/utils";
 import type { CharacterMap } from "./ChatArea";
 import { useTranslate } from "../../hooks/use-translate";
 
+/** Build style object for name color (supports gradients). */
+function nameColorStyle(color?: string): React.CSSProperties | undefined {
+  if (!color) return undefined;
+  if (color.startsWith("linear-gradient")) {
+    return {
+      background: color,
+      WebkitBackgroundClip: "text",
+      WebkitTextFillColor: "transparent",
+      backgroundClip: "text",
+    };
+  }
+  return { color };
+}
+
 /** Regex to detect a message that is just an image/GIF URL */
 const IMAGE_URL_RE = /^https?:\/\/\S+\.(?:gif|png|jpe?g|webp)(?:\?[^\s]*)?$/i;
 
@@ -367,7 +381,7 @@ export const ConversationMessage = memo(function ConversationMessage({
                 <div className="flex items-baseline gap-2 mb-0.5">
                   <span
                     className="text-[0.9375rem] font-semibold leading-tight hover:underline cursor-default"
-                    style={segColor ? { color: segColor } : undefined}
+                    style={nameColorStyle(segColor)}
                   >
                     {segName}
                   </span>
@@ -494,7 +508,7 @@ export const ConversationMessage = memo(function ConversationMessage({
           <div className="mari-message-meta flex items-baseline gap-2 mb-0.5">
             <span
               className="mari-message-name text-[0.9375rem] font-semibold leading-tight hover:underline cursor-default"
-              style={nameColor ? { color: nameColor } : undefined}
+              style={nameColorStyle(nameColor)}
             >
               {displayName}
             </span>

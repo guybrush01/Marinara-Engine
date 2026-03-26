@@ -742,6 +742,7 @@ export function CharactersPanel() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (!confirm(`Delete "${char.parsed?.name ?? "this character"}"? This cannot be undone.`)) return;
                       deleteCharacter.mutate(char.id);
                     }}
                     className="rounded-lg p-1.5 transition-all hover:bg-[var(--destructive)]/15"

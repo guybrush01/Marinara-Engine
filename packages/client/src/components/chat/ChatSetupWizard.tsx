@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────
 // Chat Setup Wizard — step-by-step new chat configuration
 // ──────────────────────────────────────────────
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronRight,
@@ -105,6 +105,14 @@ function ConversationQuickSetup({ chat, onFinish }: ChatSetupWizardProps) {
   const [scheduleState, setScheduleState] = useState<"idle" | "generating" | "done">("idle");
   const [autonomousEnabled, setAutonomousEnabled] = useState(true);
   const [generateSchedule, setGenerateSchedule] = useState(true);
+
+  // Apply the saved custom conversation prompt immediately so it persists even if the wizard is skipped
+  useEffect(() => {
+    const savedPrompt = useUIStore.getState().customConversationPrompt;
+    if (savedPrompt) {
+      updateMeta.mutate({ id: chat.id, customSystemPrompt: savedPrompt });
+    }
+  }, [chat.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const characters = (allCharacters ?? []) as Array<{ id: string; data: string; avatarPath: string | null }>;
   const personas = (allPersonas ?? []) as Array<{ id: string; name: string; avatarPath: string | null }>;

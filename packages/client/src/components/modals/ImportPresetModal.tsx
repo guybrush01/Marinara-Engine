@@ -42,7 +42,7 @@ export function ImportPresetModal({ open, onClose }: Props) {
       if (data.success) {
         setStatus("success");
         setMessage(`Imported preset successfully!`);
-        qc.invalidateQueries({ queryKey: ["presets"] });
+        qc.invalidateQueries();
       } else {
         setStatus("error");
         setMessage(data.error ?? "Import failed");
