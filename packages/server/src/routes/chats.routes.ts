@@ -279,8 +279,48 @@ export async function chatsRoutes(app: FastifyInstance) {
     const chatMessages = await storage.listMessages(req.params.id);
     const chatMeta = typeof chat.metadata === "string" ? JSON.parse(chat.metadata) : (chat.metadata ?? {});
 
-    // ── Live assembly: always try assembling from the current preset first ──
-    // This ensures any edits to the preset are reflected immediately.
+    // ── Primary: return the cached prompt from the last generation ──
+    // This is an exact copy of what was actually sent to the model,
+    // including all runtime injections (lorebooks, game state, scene context, etc.).
+    for (let i = chatMessages.length - 1; i >= 0; i--) {
+      const m = chatMessages[i]! as any;
+      if (m.role === "assistant") {
+        let extra = typeof m.extra === "string" ? JSON.parse(m.extra) : (m.extra ?? {});
+        let cachedPrompt = extra.cachedPrompt as Array<{ role: string; content: string }> | undefined;
+        let generationInfo = extra.generationInfo as Record<string, unknown> | undefined;
+
+        // If message-level extra doesn't have it (swipe overwrite), check swipes
+        if (!cachedPrompt && m.id) {
+          const swipes = await storage.getSwipes(m.id);
+          const activeSwipe = swipes.find((s: any) => s.index === m.activeSwipeIndex);
+          if (activeSwipe) {
+            const swExtra =
+              typeof activeSwipe.extra === "string" ? JSON.parse(activeSwipe.extra) : (activeSwipe.extra ?? {});
+            cachedPrompt = swExtra.cachedPrompt;
+            if (swExtra.generationInfo) generationInfo = swExtra.generationInfo;
+          }
+          if (!cachedPrompt) {
+            for (const sw of swipes) {
+              const swExtra = typeof sw.extra === "string" ? JSON.parse(sw.extra) : (sw.extra ?? {});
+              if (swExtra.cachedPrompt) {
+                cachedPrompt = swExtra.cachedPrompt;
+                if (swExtra.generationInfo) generationInfo = swExtra.generationInfo;
+                break;
+              }
+            }
+          }
+        }
+
+        if (cachedPrompt) {
+          return { messages: cachedPrompt, parameters: null, generationInfo: generationInfo ?? null };
+        }
+        break;
+      }
+    }
+
+    // ── Fallback: live assembly preview (no generation has happened yet) ──
+    // This is a best-effort approximation; it won't include runtime-only
+    // injections like lorebooks, game state, scene context, semantic memory, etc.
     const presetId = chat.promptPresetId ?? chatMeta.presetId;
     if (presetId) {
       try {
@@ -623,44 +663,6 @@ export async function chatsRoutes(app: FastifyInstance) {
         }
       } catch (e) {
         console.error("[peek-prompt] Assembler failed, falling through to cached/raw messages:", e);
-      }
-    }
-
-    // ── Fallback: return cached prompt from the last generation ──
-    // Used when no preset is assigned or assembly failed.
-    for (let i = chatMessages.length - 1; i >= 0; i--) {
-      const m = chatMessages[i]! as any;
-      if (m.role === "assistant") {
-        let extra = typeof m.extra === "string" ? JSON.parse(m.extra) : (m.extra ?? {});
-        let cachedPrompt = extra.cachedPrompt as Array<{ role: string; content: string }> | undefined;
-        let generationInfo = extra.generationInfo as Record<string, unknown> | undefined;
-
-        // If message-level extra doesn't have it (swipe overwrite), check swipes
-        if (!cachedPrompt && m.id) {
-          const swipes = await storage.getSwipes(m.id);
-          const activeSwipe = swipes.find((s: any) => s.index === m.activeSwipeIndex);
-          if (activeSwipe) {
-            const swExtra =
-              typeof activeSwipe.extra === "string" ? JSON.parse(activeSwipe.extra) : (activeSwipe.extra ?? {});
-            cachedPrompt = swExtra.cachedPrompt;
-            if (swExtra.generationInfo) generationInfo = swExtra.generationInfo;
-          }
-          if (!cachedPrompt) {
-            for (const sw of swipes) {
-              const swExtra = typeof sw.extra === "string" ? JSON.parse(sw.extra) : (sw.extra ?? {});
-              if (swExtra.cachedPrompt) {
-                cachedPrompt = swExtra.cachedPrompt;
-                if (swExtra.generationInfo) generationInfo = swExtra.generationInfo;
-                break;
-              }
-            }
-          }
-        }
-
-        if (cachedPrompt) {
-          return { messages: cachedPrompt, parameters: null, generationInfo: generationInfo ?? null, cached: true };
-        }
-        break;
       }
     }
 
