@@ -1902,9 +1902,15 @@ function WorldInfoButton({ chatId }: { chatId: string | null }) {
       {open &&
         (isMobile ? (
           createPortal(
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 max-md:pt-[max(1rem,env(safe-area-inset-top))]">
-              <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} />
-              <div className="relative w-full max-w-sm max-h-[calc(100dvh-4rem)] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 shadow-2xl shadow-black/40 animate-message-in">
+            <div
+              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 max-md:pt-[max(1rem,env(safe-area-inset-top))]"
+              onClick={() => setOpen(false)}
+            >
+              <div className="absolute inset-0 bg-black/30" />
+              <div
+                className="relative w-full max-w-sm max-h-[calc(100dvh-4rem)] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 shadow-2xl shadow-black/40 animate-message-in"
+                onClick={(e) => e.stopPropagation()}
+              >
                 {panelContent}
               </div>
             </div>,
@@ -2030,9 +2036,15 @@ function AuthorNotesButton({ chatId, chatMeta }: { chatId: string | null; chatMe
       {open &&
         (isMobile ? (
           createPortal(
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 max-md:pt-[max(1rem,env(safe-area-inset-top))]">
-              <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} />
-              <div className="relative w-full max-w-sm max-h-[calc(100dvh-4rem)] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 shadow-2xl shadow-black/40 animate-message-in">
+            <div
+              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 max-md:pt-[max(1rem,env(safe-area-inset-top))]"
+              onClick={() => setOpen(false)}
+            >
+              <div className="absolute inset-0 bg-black/30" />
+              <div
+                className="relative w-full max-w-sm max-h-[calc(100dvh-4rem)] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 shadow-2xl shadow-black/40 animate-message-in"
+                onClick={(e) => e.stopPropagation()}
+              >
                 {panelContent}
               </div>
             </div>,
