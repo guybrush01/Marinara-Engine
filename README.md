@@ -169,6 +169,56 @@ Then open **<http://localhost:7860>**. Everything runs locally.
 
 Bare `pnpm start` binds to `127.0.0.1` by default. If you want LAN access without using a launcher, set `HOST=0.0.0.0` first.
 
+### Run via Container (Docker / Podman)
+
+#### Pre-built Image (Docker)
+
+```bash
+docker compose up -d
+```
+
+Then open **<http://localhost:7860>**.
+
+Data (SQLite database, uploads, fonts, default backgrounds) is stored in the named volume `marinara-data`. To inspect it:
+
+```bash
+docker volume inspect marinara-data
+```
+
+To pull the latest image and restart:
+
+```bash
+docker compose down && docker compose pull && docker compose up -d
+```
+
+#### Build from Source (Docker)
+
+If you prefer to build the image yourself:
+
+```bash
+git clone https://github.com/SpicyMarinara/Marinara-Engine.git
+cd Marinara-Engine
+docker build -t Marinara-Engine .
+docker run -d -p 7860:7860 -v marinara-data:/app/data Marinara-Engine
+```
+
+#### Podman
+
+Podman is a drop-in replacement for Docker with better security features. Rootless mode is supported out of the box — no daemon required.
+
+**Pre-built image:**
+
+```bash
+podman compose up -d
+```
+Or:
+
+```bash
+podman run -d -p 7860:7860 -v marinara-data:/app/data hcr.io/spicymarinara/marinara-engine:latest
+```
+
+> **Note:** `podman compose` requires the [`podman-compose`](https://github.com/containers/podman-compose/) plugin. On most distributions you can install it with `sudo dnf install podman-compose` (Fedora), `sudo apt install podman-compose` (Debian/Ubuntu), or `pip install podman-compose`.
+
 ### Updating
 
 Git-based installs update automatically. If you launch Marinara Engine via `start.sh`, `start.bat`, or `start-termux.sh` from a git checkout, the launcher:
