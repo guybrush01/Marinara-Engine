@@ -32,6 +32,10 @@ import { backupRoutes } from "./backup.routes.js";
 import { translateRoutes } from "./translate.routes.js";
 import { hapticRoutes } from "./haptic.routes.js";
 import { botBrowserRoutes } from "./bot-browser.routes.js";
+import { botBrowserJannyRoutes } from "./bot-browser-janny.routes.js";
+import { botBrowserChartavernRoutes } from "./bot-browser-chartavern.routes.js";
+import { botBrowserPygmalionRoutes } from "./bot-browser-pygmalion.routes.js";
+import { botBrowserWyvernRoutes } from "./bot-browser-wyvern.routes.js";
 import { chatFoldersRoutes } from "./chat-folders.routes.js";
 import { updatesRoutes } from "./updates.routes.js";
 
@@ -67,5 +71,9 @@ export async function registerRoutes(app: FastifyInstance) {
   await app.register(translateRoutes, { prefix: "/api/translate" });
   await app.register(hapticRoutes, { prefix: "/api/haptic" });
   await app.register(botBrowserRoutes, { prefix: "/api/bot-browser" });
+  await app.register(botBrowserJannyRoutes, { prefix: "/api/bot-browser" });
+  await app.register(botBrowserChartavernRoutes, { prefix: "/api/bot-browser" });
+  await app.register(botBrowserPygmalionRoutes, { prefix: "/api/bot-browser" });
+  await app.register(botBrowserWyvernRoutes, { prefix: "/api/bot-browser" });
   await app.register(updatesRoutes, { prefix: "/api/updates" });
 }
