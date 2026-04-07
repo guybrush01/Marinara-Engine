@@ -142,6 +142,11 @@ export async function chatsRoutes(app: FastifyInstance) {
     },
   );
 
+  // Total message count for a chat (lightweight, for absolute numbering)
+  app.get<{ Params: { id: string } }>("/:id/message-count", async (req) => {
+    return { count: await storage.countMessages(req.params.id) };
+  });
+
   // Create message
   app.post<{ Params: { id: string } }>("/:id/messages", async (req) => {
     const input = createMessageSchema.parse({ ...(req.body as Record<string, unknown>), chatId: req.params.id });

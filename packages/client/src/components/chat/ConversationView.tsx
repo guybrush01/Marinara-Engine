@@ -28,6 +28,7 @@ interface ConversationViewProps {
   isFetchingNextPage: boolean;
   fetchNextPage: () => void;
   pageCount: number;
+  totalMessageCount: number;
   characterMap: CharacterMap;
   characterNames: string[];
   personaInfo?: PersonaInfo;
@@ -105,6 +106,7 @@ export function ConversationView({
   isFetchingNextPage,
   fetchNextPage,
   pageCount,
+  totalMessageCount,
   characterMap,
   characterNames,
   personaInfo,
@@ -252,6 +254,9 @@ export function ConversationView({
 
   const renderedItems = useMemo(() => {
     if (!messages) return [];
+    // Offset so message numbers reflect absolute position in the full chat history,
+    // not just the position within the paginated window.
+    const messageOffset = totalMessageCount - messages.length;
     const items: Array<
       | { type: "separator"; key: string; label: string }
       | { type: "message"; key: string; msg: Message; isGrouped: boolean; index: number }
@@ -306,7 +311,7 @@ export function ConversationView({
                     extra: { displayText: null, isGenerated: false, tokenCount: null, generationInfo: null },
                   },
               isGrouped: li === 0 ? grouped : true,
-              index: i,
+              index: messageOffset + i,
             });
           });
           continue;
@@ -324,10 +329,10 @@ export function ConversationView({
         }
       }
       const displayMsg = displayContent !== msg.content ? { ...msg, content: displayContent } : msg;
-      items.push({ type: "message", key: msg.id, msg: displayMsg, isGrouped: grouped, index: i });
+      items.push({ type: "message", key: msg.id, msg: displayMsg, isGrouped: grouped, index: messageOffset + i });
     }
     return items;
-  }, [messages, characterMap]);
+  }, [messages, characterMap, totalMessageCount]);
 
   // ── Staggered reveal for split assistant lines ──
   // When a new multi-line assistant message arrives, show lines one by one

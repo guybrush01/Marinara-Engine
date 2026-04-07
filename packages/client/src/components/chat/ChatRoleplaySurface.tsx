@@ -389,7 +389,11 @@ function WorldInfoButton({ chatId }: { chatId: string | null }) {
       {open &&
         (isMobile ? (
           createPortal(
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 max-md:pt-[max(1rem,env(safe-area-inset-top))]">
+            <div
+              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 max-md:pt-[max(1rem,env(safe-area-inset-top))]"
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+            >
               <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} />
               <div
                 className="relative max-h-[calc(100dvh-4rem)] w-full max-w-sm overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 shadow-2xl shadow-black/40 animate-message-in"
@@ -475,7 +479,11 @@ function AuthorNotesButton({ chatId, chatMeta }: { chatId: string | null; chatMe
       {open &&
         (isMobile ? (
           createPortal(
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 max-md:pt-[max(1rem,env(safe-area-inset-top))]">
+            <div
+              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 max-md:pt-[max(1rem,env(safe-area-inset-top))]"
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+            >
               <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} />
               <div
                 className="relative max-h-[calc(100dvh-4rem)] w-full max-w-sm overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 shadow-2xl shadow-black/40 animate-message-in"
@@ -556,6 +564,7 @@ type RoleplaySurfaceProps = {
   regenerateMessageId: string | null;
   shouldAnimateMessages: boolean;
   summaryContextSize: number;
+  totalMessageCount: number;
   lastAssistantMessageId: string | null;
   settingsOpen: boolean;
   filesOpen: boolean;
@@ -637,6 +646,7 @@ export function ChatRoleplaySurface({
   regenerateMessageId,
   shouldAnimateMessages,
   summaryContextSize,
+  totalMessageCount,
   lastAssistantMessageId,
   settingsOpen,
   filesOpen,
@@ -922,17 +932,6 @@ export function ChatRoleplaySurface({
 
                 {messages?.map((msg, i) => {
                   const isRegenerating = isStreaming && regenerateMessageId === msg.id;
-                  // While the StreamingIndicator is active (new message streaming, not regen),
-                  // hide the last assistant message from the list to prevent a duplicate flash
-                  // when refreshMessagesAuthoritatively lands the real row before setStreaming(false).
-                  if (
-                    isStreaming &&
-                    !regenerateMessageId &&
-                    msg.role === "assistant" &&
-                    msg.id === lastAssistantMessageId
-                  ) {
-                    return null;
-                  }
                   return (
                     <div
                       key={msg.id}
@@ -958,7 +957,7 @@ export function ChatRoleplaySurface({
                           personaInfo={personaInfo}
                           chatMode={chatMode}
                           messageDepth={messages.length - 1 - i}
-                          messageIndex={i + 1}
+                          messageIndex={totalMessageCount - messages.length + i + 1}
                           isGrouped={isGrouped(i)}
                           groupChatMode={groupChatMode}
                           chatCharacterIds={chatCharIds}
@@ -982,7 +981,7 @@ export function ChatRoleplaySurface({
                           personaInfo={personaInfo}
                           chatMode={chatMode}
                           messageDepth={messages.length - 1 - i}
-                          messageIndex={i + 1}
+                          messageIndex={totalMessageCount - messages.length + i + 1}
                           isGrouped={isGrouped(i)}
                           groupChatMode={groupChatMode}
                           chatCharacterIds={chatCharIds}

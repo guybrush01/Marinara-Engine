@@ -371,10 +371,11 @@ export async function generateRoutes(app: FastifyInstance) {
         }
       }
 
-      // Always collapse 3+ consecutive newlines into a double newline —
+      // Always collapse 3+ consecutive blank lines into a double newline —
       // these waste tokens and produce messy logs regardless of user regex settings.
+      // Matches pure newlines AND lines that contain only whitespace.
       for (const msg of mappedMessages) {
-        msg.content = msg.content.replace(/\n{3,}/g, "\n\n");
+        msg.content = msg.content.replace(/\n([ \t]*\n){2,}/g, "\n\n");
       }
 
       const characterIds: string[] = JSON.parse(chat.characterIds as string);
@@ -2411,6 +2412,7 @@ export async function generateRoutes(app: FastifyInstance) {
           if (mem.sceneDirections) state.sceneDirections = mem.sceneDirections;
           if (mem.pacing) state.pacing = mem.pacing;
           if (mem.recentlyFulfilled) state.recentlyFulfilled = mem.recentlyFulfilled;
+          if (mem.staleDetected != null) state.staleDetected = mem.staleDetected;
           if (Object.keys(state).length > 0) {
             agentContext.memory._secretPlotState = state;
           }
@@ -2839,6 +2841,7 @@ export async function generateRoutes(app: FastifyInstance) {
             if (plotData.pacing) {
               await agentsStore.setMemory(agentConfigId, input.chatId, "pacing", plotData.pacing);
             }
+            await agentsStore.setMemory(agentConfigId, input.chatId, "staleDetected", plotData.staleDetected ?? false);
             console.log(
               `[secret-plot-driver] Persisted pre-gen state — arc: ${plotData.overarchingArc ? "updated" : "unchanged"}, directions: ${Array.isArray(plotData.sceneDirections) ? (plotData.sceneDirections as any[]).filter((d: any) => !d.fulfilled).length : 0} active, pacing: ${plotData.pacing ?? "unknown"}`,
             );
@@ -3311,9 +3314,9 @@ export async function generateRoutes(app: FastifyInstance) {
         // Merge adjacent same-role messages (especially system) before sending to provider
         messagesForGen = mergeAdjacentMessages(messagesForGen as any) as typeof messagesForGen;
 
-        // Collapse 3+ consecutive newlines in all messages to save tokens
+        // Collapse 3+ consecutive blank lines in all messages to save tokens
         for (const m of messagesForGen) {
-          m.content = m.content.replace(/\n{3,}/g, "\n\n");
+          m.content = m.content.replace(/\n([ \t]*\n){2,}/g, "\n\n");
         }
 
         // Reset per-character accumulators
@@ -3478,6 +3481,29 @@ export async function generateRoutes(app: FastifyInstance) {
                     return results[0]?.result ?? "Tool execution failed";
                   },
                 };
+              }
+            }
+
+            // ── Seed encrypted reasoning cache from DB ──
+            // OpenAI Responses API uses encrypted reasoning items for multi-turn continuity.
+            // These must be replayed on each request. If the in-memory cache was lost (e.g. server
+            // restart), recover from the last assistant message's persisted extra.
+            // On regens/swipes: clear the cache so we re-derive from the filtered chatMessages
+            // (which excludes the message being regenerated). Otherwise we'd replay the reasoning
+            // from the discarded response instead of the turn before it.
+            if (input.regenerateMessageId) {
+              encryptedReasoningCache.delete(input.chatId);
+            }
+            if (!encryptedReasoningCache.has(input.chatId)) {
+              for (let i = chatMessages.length - 1; i >= 0; i--) {
+                const msg = chatMessages[i]!;
+                if (msg.role === "assistant") {
+                  const ex = parseExtra(msg.extra);
+                  if (Array.isArray(ex.encryptedReasoning) && ex.encryptedReasoning.length > 0) {
+                    encryptedReasoningCache.set(input.chatId, ex.encryptedReasoning);
+                  }
+                  break;
+                }
               }
             }
 
@@ -3858,6 +3884,10 @@ export async function generateRoutes(app: FastifyInstance) {
             else extraUpdate.thinking = null;
             // Store Gemini response parts (thought signatures + summaries) for multi-turn continuity
             if (geminiResponseParts) extraUpdate.geminiParts = geminiResponseParts;
+            // Store OpenAI Responses API encrypted reasoning items for multi-turn continuity
+            const cachedReasoning = encryptedReasoningCache.get(input.chatId);
+            if (cachedReasoning?.length) extraUpdate.encryptedReasoning = cachedReasoning;
+            else extraUpdate.encryptedReasoning = null;
             // Cache context injections (prose-guardian etc.) on the message so regens can reuse them
             if (!input.regenerateMessageId && contextInjections.length > 0) {
               extraUpdate.contextInjections = contextInjections;

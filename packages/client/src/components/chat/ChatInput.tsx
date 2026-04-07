@@ -312,7 +312,23 @@ export const ChatInput = memo(function ChatInput({
       return;
     }
 
-    const message = applyToUserInput(normalized);
+    let message = applyToUserInput(normalized);
+
+    // Input translation: translate user's message before sending
+    const chatMeta = chat?.metadata
+      ? typeof chat.metadata === "string"
+        ? JSON.parse(chat.metadata)
+        : chat.metadata
+      : {};
+    if (chatMeta.translateInput && message.trim()) {
+      try {
+        const { translateText } = await import("../../hooks/use-translate");
+        const translated = await translateText(message);
+        if (translated.trim()) message = translated;
+      } catch {
+        toast.error("Failed to translate message — sending original");
+      }
+    }
 
     if (textareaRef.current) {
       textareaRef.current.value = "";

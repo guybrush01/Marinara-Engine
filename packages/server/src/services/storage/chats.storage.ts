@@ -119,6 +119,11 @@ export function createChatsStorage(db: DB) {
 
     // ── Messages ──
 
+    async countMessages(chatId: string): Promise<number> {
+      const [row] = await db.select({ count: count() }).from(messages).where(eq(messages.chatId, chatId));
+      return row?.count ?? 0;
+    },
+
     async listMessages(chatId: string) {
       const rows = await db.select().from(messages).where(eq(messages.chatId, chatId)).orderBy(messages.createdAt);
       const swipeCounts = await db

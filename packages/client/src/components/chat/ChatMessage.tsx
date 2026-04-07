@@ -383,8 +383,16 @@ function renderContent(
     (_m, before: string, attr: string, after: string) => before + attr.replace(/\n/g, ATTR_NL_PLACEHOLDER) + after,
   );
   const withBreaks = attrProtected
-    .replace(/(<svg[\s\S]*?<\/svg>)|(<style[\s\S]*?<\/style>)|(>\s*)\n(\s*<)|\n/gi, (_m, svgBlock, styleBlock, pre, post) =>
-      svgBlock ? svgBlock : styleBlock ? styleBlock : pre ? `${pre}${post}` : '<br style="display:block;margin:0.2em 0">',
+    .replace(
+      /(<svg[\s\S]*?<\/svg>)|(<style[\s\S]*?<\/style>)|(>\s*)\n(\s*<)|\n/gi,
+      (_m, svgBlock, styleBlock, pre, post) =>
+        svgBlock
+          ? svgBlock
+          : styleBlock
+            ? styleBlock
+            : pre
+              ? `${pre}${post}`
+              : '<br style="display:block;margin:0.2em 0">',
     )
     .replace(new RegExp(ATTR_NL_PLACEHOLDER, "g"), "\n");
 
@@ -1137,7 +1145,7 @@ export const ChatMessage = memo(function ChatMessage({
               <ActionBtn icon={copied ? "\u2713" : <Copy size="0.6875rem" />} onClick={handleCopy} title="Copy" dark />
               <ActionBtn
                 icon={<Languages size="0.6875rem" />}
-                onClick={() => translate(message.id, message.content)}
+                onClick={() => translate(message.id, message.content, message.chatId)}
                 title={translatedText ? "Hide translation" : "Translate"}
                 className={translatedText ? "text-blue-400/80 hover:text-blue-300" : undefined}
                 dark
@@ -1449,7 +1457,7 @@ export const ChatMessage = memo(function ChatMessage({
             <ActionBtn icon={copied ? "✓" : <Copy size="0.625rem" />} onClick={handleCopy} title="Copy" />
             <ActionBtn
               icon={<Languages size="0.625rem" />}
-              onClick={() => translate(message.id, message.content)}
+              onClick={() => translate(message.id, message.content, message.chatId)}
               title={translatedText ? "Hide translation" : "Translate"}
               className={translatedText ? "text-blue-500" : undefined}
             />

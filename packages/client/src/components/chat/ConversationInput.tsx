@@ -265,7 +265,23 @@ export function ConversationInput({ characterNames = [] }: ConversationInputProp
     // triggering another generation — the in-progress generation will see
     // it (server re-reads messages after any busy delay).
     if (isStreaming) {
-      const message = applyToUserInput(raw);
+      let message = applyToUserInput(raw);
+      // Input translation for streaming path too
+      const activeChatData = useChatStore.getState().activeChat;
+      const streamMeta = activeChatData?.metadata
+        ? typeof activeChatData.metadata === "string"
+          ? JSON.parse(activeChatData.metadata)
+          : activeChatData.metadata
+        : {};
+      if (streamMeta.translateInput && message.trim()) {
+        try {
+          const { translateText } = await import("../../hooks/use-translate");
+          const translated = await translateText(message);
+          if (translated.trim()) message = translated;
+        } catch {
+          toast.error("Failed to translate message — sending original");
+        }
+      }
       if (textareaRef.current) {
         textareaRef.current.value = "";
         textareaRef.current.style.height = "auto";
@@ -305,7 +321,25 @@ export function ConversationInput({ characterNames = [] }: ConversationInputProp
       return;
     }
 
-    const message = applyToUserInput(raw);
+    let message = applyToUserInput(raw);
+
+    // Input translation: translate user's message before sending
+    const activeChat = useChatStore.getState().activeChat;
+    const chatMeta = activeChat?.metadata
+      ? typeof activeChat.metadata === "string"
+        ? JSON.parse(activeChat.metadata)
+        : activeChat.metadata
+      : {};
+    if (chatMeta.translateInput && message.trim()) {
+      try {
+        const { translateText } = await import("../../hooks/use-translate");
+        const translated = await translateText(message);
+        if (translated.trim()) message = translated;
+      } catch {
+        toast.error("Failed to translate message — sending original");
+      }
+    }
+
     if (textareaRef.current) {
       textareaRef.current.value = "";
       textareaRef.current.style.height = "auto";

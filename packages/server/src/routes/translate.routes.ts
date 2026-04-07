@@ -104,6 +104,15 @@ async function translateWithDeepLX(input: z.infer<typeof translateSchema>) {
     throw Object.assign(new Error("Invalid DeepLX URL"), { statusCode: 400 });
   }
 
+  // Block requests to cloud metadata endpoints (SSRF protection).
+  // localhost/private IPs are allowed since DeepLX is typically self-hosted.
+  const hostname = url.hostname.toLowerCase();
+  if (hostname === "169.254.169.254" || hostname.startsWith("169.254.") || hostname.endsWith(".internal")) {
+    throw Object.assign(new Error("DeepLX URL must not point to a cloud metadata or internal service address"), {
+      statusCode: 400,
+    });
+  }
+
   const response = await fetch(url.toString(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },

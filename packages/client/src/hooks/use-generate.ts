@@ -98,6 +98,9 @@ async function refreshMessagesAuthoritatively(
   const persisted = [...persistedMessages];
   let refetchSucceeded = false;
 
+  // Also refresh the total message count used for absolute numbering
+  qc.invalidateQueries({ queryKey: chatKeys.messageCount(chatId) });
+
   await qc.cancelQueries({ queryKey: msgKey, exact: true });
 
   try {
@@ -845,8 +848,13 @@ export function useGenerate() {
                 imageUrl: string;
               };
               toast(`${selfieData.characterName} sent a selfie 📸`);
-              // Invalidate current chat messages to show the attachment
-              await refreshMessagesAuthoritatively(qc, params.chatId, persistedMessages.values());
+              // During streaming the real message is deferred — refreshing now
+              // would insert it into the cache alongside the StreamingIndicator,
+              // causing a duplicate flash. The finally block's authoritative
+              // refresh will pick up the selfie attachment from DB.
+              if (!streamingEnabled) {
+                await refreshMessagesAuthoritatively(qc, params.chatId, persistedMessages.values());
+              }
               break;
             }
 
@@ -865,8 +873,13 @@ export function useGenerate() {
                 reason?: string;
               };
               toast(illData.reason ? `🎨 ${illData.reason}` : "🎨 Scene illustration generated");
-              // Invalidate messages to show the new attachment
-              await refreshMessagesAuthoritatively(qc, params.chatId, persistedMessages.values());
+              // During streaming the real message is deferred — refreshing now
+              // would insert it into the cache alongside the StreamingIndicator,
+              // causing a duplicate flash. The finally block's authoritative
+              // refresh will pick up the illustration attachment from DB.
+              if (!streamingEnabled) {
+                await refreshMessagesAuthoritatively(qc, params.chatId, persistedMessages.values());
+              }
               break;
             }
 
@@ -1033,14 +1046,12 @@ export function useGenerate() {
       } finally {
         // Cancel any pending animation frame to prevent leaks
         cancelAnimationFrame(rafId);
-        await refreshMessagesAuthoritatively(qc, params.chatId, persistedMessages.values());
+
         // Refresh game state from DB so the HUD shows the correct tracker data
         // for the active swipe. SSE game_state_patch events update the store
         // during generation, but React scheduling / streaming can cause them
         // to not fully propagate — this authoritative DB fetch ensures the
         // final state is always correct (especially after swipe regeneration).
-        // Awaited so the store is updated BEFORE setStreaming(false) triggers
-        // UI transitions that could flash stale data.
         try {
           const gs = await api.get<import("@marinara-engine/shared").GameState | null>(
             `/chats/${params.chatId}/game-state`,
@@ -1118,13 +1129,17 @@ export function useGenerate() {
           // Only clear global streaming/UI state if this chat is still the one
           // being displayed, to avoid corrupting another chat's active generation.
           if (useChatStore.getState().streamingChatId === params.chatId) {
-            // Wait two frames so React commits the refetched messages before
-            // removing the streaming overlay — a single rAF can race with
-            // React 19's render scheduling, causing a flash where neither the
-            // stream buffer nor the real message is visible.
-            await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+            // Authoritative refresh BEFORE clearing streaming state. This
+            // fetches the latest messages from DB (including illustrations and
+            // other post-processing attachments). React 19 batches the React
+            // Query cache update and the Zustand streaming state update into
+            // one commit since they happen in the same microtask after the
+            // await resolves — preventing both duplicate-flash and empty-flash.
+            await refreshMessagesAuthoritatively(qc, params.chatId, persistedMessages.values());
             setStreaming(false);
             clearStreamBuffer();
+          } else {
+            await refreshMessagesAuthoritatively(qc, params.chatId, persistedMessages.values());
           }
           if (isActiveChat()) {
             setProcessing(false);
@@ -1136,6 +1151,57 @@ export function useGenerate() {
           // Always clean up per-chat tracking for this generation
           useChatStore.getState().clearPerChatState(params.chatId);
           useChatStore.getState().setAbortController(params.chatId, null);
+        } else {
+          // Not the owner but still need messages up to date
+          await refreshMessagesAuthoritatively(qc, params.chatId, persistedMessages.values());
+        }
+
+        // Auto-translate newly generated assistant messages if enabled
+        if (receivedContent) {
+          try {
+            const chatData = qc.getQueryData<{ metadata?: string | Record<string, unknown> }>(
+              chatKeys.detail(params.chatId),
+            );
+            const meta =
+              chatData?.metadata != null
+                ? typeof chatData.metadata === "string"
+                  ? JSON.parse(chatData.metadata)
+                  : chatData.metadata
+                : {};
+            if (meta.autoTranslate) {
+              const { useTranslationStore } = await import("./use-translate");
+              const store = useTranslationStore.getState();
+              for (const [id, msg] of persistedMessages) {
+                if (msg.role === "assistant" && msg.content && !store.translations[id]) {
+                  store.setTranslating(id, true);
+                  api
+                    .post<{ translatedText: string }>("/translate", {
+                      text: msg.content,
+                      provider: store.config.provider,
+                      targetLanguage: store.config.targetLanguage,
+                      connectionId: store.config.connectionId,
+                      deeplApiKey: store.config.deeplApiKey,
+                      deeplxUrl: store.config.deeplxUrl,
+                    })
+                    .then((result) => {
+                      store.setTranslation(id, result.translatedText);
+                      store.setTranslating(id, false);
+                      // Persist to message extra
+                      api
+                        .patch(`/chats/${params.chatId}/messages/${id}/extra`, {
+                          translation: result.translatedText,
+                        })
+                        .catch(() => {});
+                    })
+                    .catch(() => {
+                      store.setTranslating(id, false);
+                    });
+                }
+              }
+            }
+          } catch {
+            /* non-critical — don't block generation cleanup */
+          }
         }
       }
       return receivedContent;

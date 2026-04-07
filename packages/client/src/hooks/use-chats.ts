@@ -11,6 +11,7 @@ export const chatKeys = {
   list: () => [...chatKeys.all, "list"] as const,
   detail: (id: string) => [...chatKeys.all, "detail", id] as const,
   messages: (chatId: string) => [...chatKeys.all, "messages", chatId] as const,
+  messageCount: (chatId: string) => [...chatKeys.all, "messageCount", chatId] as const,
   group: (groupId: string) => [...chatKeys.all, "group", groupId] as const,
 };
 
@@ -47,6 +48,15 @@ export function useChatMessages(chatId: string | null, pageSize: number = 0) {
       return lastPage[0]?.createdAt;
     },
     enabled: !!chatId,
+  });
+}
+
+export function useChatMessageCount(chatId: string | null) {
+  return useQuery({
+    queryKey: chatKeys.messageCount(chatId ?? ""),
+    queryFn: () => api.get<{ count: number }>(`/chats/${chatId}/message-count`),
+    enabled: !!chatId,
+    staleTime: 30_000,
   });
 }
 
@@ -149,6 +159,7 @@ export function useCreateMessage(chatId: string | null) {
     onSuccess: () => {
       if (chatId) {
         qc.invalidateQueries({ queryKey: chatKeys.messages(chatId) });
+        qc.invalidateQueries({ queryKey: chatKeys.messageCount(chatId) });
         qc.invalidateQueries({ queryKey: chatKeys.list() });
       }
     },
@@ -162,6 +173,7 @@ export function useDeleteMessage(chatId: string | null) {
     onSuccess: () => {
       if (chatId) {
         qc.invalidateQueries({ queryKey: chatKeys.messages(chatId) });
+        qc.invalidateQueries({ queryKey: chatKeys.messageCount(chatId) });
       }
     },
   });
@@ -174,6 +186,7 @@ export function useDeleteMessages(chatId: string | null) {
     onSuccess: () => {
       if (chatId) {
         qc.invalidateQueries({ queryKey: chatKeys.messages(chatId) });
+        qc.invalidateQueries({ queryKey: chatKeys.messageCount(chatId) });
       }
     },
   });

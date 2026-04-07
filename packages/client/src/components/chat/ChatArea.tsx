@@ -14,6 +14,7 @@ import {
 } from "react";
 import {
   useChatMessages,
+  useChatMessageCount,
   useChat,
   useDeleteMessage,
   useDeleteMessages,
@@ -101,6 +102,8 @@ export function ChatArea() {
     () => (msgData ? [...msgData.pages].reverse().flat() : undefined),
     [msgData],
   );
+  const { data: messageCountData } = useChatMessageCount(activeChatId);
+  const totalMessageCount = messageCountData?.count ?? messages?.length ?? 0;
   const { data: allCharacters } = useCharacters();
   const { data: allPersonas } = usePersonas();
   const deleteMessage = useDeleteMessage(activeChatId);
@@ -255,6 +258,7 @@ export function ChatArea() {
 
   // Sync translation config from chat metadata to the translation store
   useEffect(() => {
+    if (!chat) return;
     useTranslationStore.getState().setConfig({
       provider: chatMeta.translationProvider ?? "google",
       targetLanguage: chatMeta.translationTargetLang ?? "en",
@@ -262,8 +266,6 @@ export function ChatArea() {
       deeplApiKey: chatMeta.translationDeeplApiKey,
       deeplxUrl: chatMeta.translationDeeplxUrl,
     });
-    // Clear cached translations on chat switch
-    useTranslationStore.getState().clearAll();
   }, [
     chat?.id,
     chatMeta.translationProvider,
@@ -272,6 +274,24 @@ export function ChatArea() {
     chatMeta.translationDeeplApiKey,
     chatMeta.translationDeeplxUrl,
   ]);
+
+  // On chat switch, clear in-memory translations and seed from persisted extras.
+  // Also re-seed when new pages are fetched (pagination) so older persisted
+  // translations become visible.
+  const msgPageCount = msgData?.pages.length ?? 0;
+  const prevChatIdRef = useRef(chat?.id);
+  useEffect(() => {
+    if (!messages) return;
+    // Clear on actual chat switch
+    if (prevChatIdRef.current !== chat?.id) {
+      useTranslationStore.getState().clearAll();
+      prevChatIdRef.current = chat?.id;
+    }
+    useTranslationStore
+      .getState()
+      .seedFromMessages(messages as unknown as Array<{ id: string; extra?: string | Record<string, unknown> | null }>);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat?.id, msgPageCount]);
 
   // Restore per-chat background from metadata when switching chats.
   // If the new chat has a saved background, apply it; otherwise keep the current
@@ -853,6 +873,7 @@ export function ChatArea() {
           isFetchingNextPage={isFetchingNextPage}
           fetchNextPage={fetchNextPage}
           pageCount={pageCount}
+          totalMessageCount={totalMessageCount}
           characterMap={characterMap}
           characterNames={characterNames}
           personaInfo={personaInfo}
@@ -943,6 +964,7 @@ export function ChatArea() {
         regenerateMessageId={regenerateMessageId}
         shouldAnimateMessages={shouldAnimateMessages}
         summaryContextSize={summaryContextSize}
+        totalMessageCount={totalMessageCount}
         lastAssistantMessageId={lastAssistantMessageId}
         settingsOpen={settingsOpen}
         filesOpen={filesOpen}

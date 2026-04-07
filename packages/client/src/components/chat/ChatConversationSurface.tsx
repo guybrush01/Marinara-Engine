@@ -25,6 +25,7 @@ type ConversationSurfaceProps = {
   isFetchingNextPage: boolean;
   fetchNextPage: () => void;
   pageCount: number;
+  totalMessageCount: number;
   characterMap: CharacterMap;
   characterNames: string[];
   personaInfo?: PersonaInfo;
@@ -77,6 +78,7 @@ export function ChatConversationSurface({
   isFetchingNextPage,
   fetchNextPage,
   pageCount,
+  totalMessageCount,
   characterMap,
   characterNames,
   personaInfo,
@@ -130,6 +132,7 @@ export function ChatConversationSurface({
           isFetchingNextPage={isFetchingNextPage}
           fetchNextPage={fetchNextPage}
           pageCount={pageCount}
+          totalMessageCount={totalMessageCount}
           characterMap={characterMap}
           characterNames={characterNames}
           personaInfo={personaInfo}

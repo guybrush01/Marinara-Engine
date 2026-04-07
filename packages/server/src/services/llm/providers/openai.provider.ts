@@ -197,7 +197,7 @@ export class OpenAIProvider extends BaseLLMProvider {
     }
 
     // GPT-5+ text verbosity control (Chat Completions path)
-    if (options.verbosity) {
+    if (options.verbosity && options.model.toLowerCase().startsWith("gpt-5")) {
       body.text = { verbosity: options.verbosity };
     }
 
@@ -374,7 +374,7 @@ export class OpenAIProvider extends BaseLLMProvider {
     }
 
     // GPT-5+ text verbosity control (Chat Completions path)
-    if (options.verbosity) {
+    if (options.verbosity && options.model.toLowerCase().startsWith("gpt-5")) {
       body.text = { verbosity: options.verbosity };
     }
 
@@ -685,19 +685,19 @@ export class OpenAIProvider extends BaseLLMProvider {
   private buildResponsesBody(messages: ChatMessage[], options: ChatOptions): Record<string, unknown> {
     const { instructions, input } = this.formatResponsesInput(messages);
 
-    // Inject encrypted reasoning items from the previous turn right before the
-    // final user message so the model can continue its reasoning chain.
-    if (options.encryptedReasoningItems?.length) {
-      // Find the last user message index to insert reasoning items before it
-      let lastUserIdx = input.length;
-      for (let i = input.length - 1; i >= 0; i--) {
-        if ((input[i] as Record<string, unknown>).role === "user") {
-          lastUserIdx = i;
-          break;
-        }
-      }
-      input.splice(lastUserIdx, 0, ...(options.encryptedReasoningItems as Array<Record<string, unknown>>));
-    }
+    // TEMPORARILY DISABLED — testing whether reasoning replay causes repetition
+    // if (options.encryptedReasoningItems?.length) {
+    //   let lastAssistantIdx = -1;
+    //   for (let i = input.length - 1; i >= 0; i--) {
+    //     if ((input[i] as Record<string, unknown>).role === "assistant") {
+    //       lastAssistantIdx = i;
+    //       break;
+    //     }
+    //   }
+    //   if (lastAssistantIdx >= 0) {
+    //     input.splice(lastAssistantIdx, 0, ...(options.encryptedReasoningItems as Array<Record<string, unknown>>));
+    //   }
+    // }
 
     const body: Record<string, unknown> = {
       model: options.model,
@@ -731,7 +731,7 @@ export class OpenAIProvider extends BaseLLMProvider {
     if (Object.keys(reasoning).length > 0) body.reasoning = reasoning;
 
     // GPT-5+ text verbosity control
-    if (options.verbosity) {
+    if (options.verbosity && options.model.toLowerCase().startsWith("gpt-5")) {
       body.text = { verbosity: options.verbosity };
     }
 
