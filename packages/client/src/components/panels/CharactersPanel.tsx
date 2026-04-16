@@ -11,6 +11,7 @@ import {
   useUpdateGroup,
   useDeleteGroup,
   useUpdateCharacter,
+  useDuplicateCharacter,
 } from "../../hooks/use-characters";
 import { useUpdateChat, useCreateMessage, chatKeys } from "../../hooks/use-chats";
 import { api } from "../../lib/api-client";
@@ -28,6 +29,7 @@ import {
   FolderOpen,
   ChevronDown,
   ChevronRight,
+  Copy,
   Users,
   X,
   UserPlus,
@@ -50,6 +52,7 @@ export function CharactersPanel() {
   const { data: characters, isLoading } = useCharacters();
   const { data: groups } = useCharacterGroups();
   const deleteCharacter = useDeleteCharacter();
+  const duplicateCharacter = useDuplicateCharacter();
   const updateCharacter = useUpdateCharacter();
   const createGroup = useCreateGroup();
   const updateGroup = useUpdateGroup();
@@ -806,6 +809,20 @@ export function CharactersPanel() {
                       {isSelected ? <X size="0.75rem" /> : <Check size="0.75rem" />}
                     </button>
                   )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      duplicateCharacter.mutate(char.id, {
+                        onSuccess: () => {
+                          toast.success(`Duplicated "${char.parsed?.name ?? "character"}"`);
+                        },
+                      });
+                    }}
+                    className="rounded-lg p-1.5 transition-all hover:bg-sky-400/10 active:scale-90"
+                    title="Duplicate character"
+                  >
+                    <Copy size="0.75rem" className="text-sky-400" />
+                  </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

@@ -55,6 +55,13 @@ export async function charactersRoutes(app: FastifyInstance) {
     return reply.status(204).send();
   });
 
+  // ── Duplicate ──
+  app.post<{ Params: { id: string } }>("/:id/duplicate", async (req, reply) => {
+    const result = await storage.duplicateCharacter(req.params.id);
+    if (!result) return reply.status(404).send({ error: "Character not found" });
+    return result;
+  });
+
   // ── Export ──
 
   app.get<{ Params: { id: string } }>("/:id/export", async (req, reply) => {
@@ -197,6 +204,13 @@ export async function charactersRoutes(app: FastifyInstance) {
   app.delete<{ Params: { id: string } }>("/personas/:id", async (req, reply) => {
     await storage.removePersona(req.params.id);
     return reply.status(204).send();
+  });
+
+  // ── Persona Duplicate ──
+  app.post<{ Params: { id: string } }>("/personas/:id/duplicate", async (req, reply) => {
+    const result = await storage.duplicatePersona(req.params.id);
+    if (!result) return reply.status(404).send({ error: "Persona not found" });
+    return result;
   });
 
   // ── Persona Export ──

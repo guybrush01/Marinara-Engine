@@ -14,6 +14,7 @@ import {
   useUpdatePersonaGroup,
   useDeletePersonaGroup,
   useUpdatePersona,
+  useDuplicatePersona,
 } from "../../hooks/use-characters";
 import { useUIStore } from "../../stores/ui.store";
 import {
@@ -32,6 +33,7 @@ import {
   FolderOpen,
   ChevronDown,
   ChevronRight,
+  Copy,
   Users,
   X,
   UserPlus,
@@ -69,6 +71,7 @@ export function PersonasPanel() {
   const { data: personas, isLoading } = usePersonas();
   const createPersona = useCreatePersona();
   const deletePersona = useDeletePersona();
+  const duplicatePersona = useDuplicatePersona();
   const updatePersona = useUpdatePersona();
   const activatePersona = useActivatePersona();
   const uploadAvatar = useUploadPersonaAvatar();
@@ -709,6 +712,20 @@ export function PersonasPanel() {
                   title="Edit"
                 >
                   <Pencil size="0.8125rem" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    duplicatePersona.mutate(persona.id, {
+                      onSuccess: () => {
+                        toast.success(`Duplicated "${persona.name}"`);
+                      },
+                    });
+                  }}
+                  className="rounded-lg p-1.5 text-[var(--muted-foreground)] transition-colors hover:bg-sky-400/10 hover:text-sky-400"
+                  title="Duplicate"
+                >
+                  <Copy size="0.8125rem" />
                 </button>
                 <button
                   onClick={(e) => {

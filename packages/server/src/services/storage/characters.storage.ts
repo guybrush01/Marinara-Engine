@@ -59,6 +59,24 @@ export function createCharactersStorage(db: DB) {
       await db.delete(characters).where(eq(characters.id, id));
     },
 
+    async duplicateCharacter(id: string) {
+      const source = await this.getById(id);
+      if (!source) return null;
+      const newCharId = newId();
+      const timestamp = now();
+      const sourceData = JSON.parse(source.data) as Record<string, unknown>;
+      sourceData.name = `${sourceData.name || "Character"} (Copy)`;
+      await db.insert(characters).values({
+        id: newCharId,
+        data: JSON.stringify(sourceData),
+        avatarPath: source.avatarPath,
+        spriteFolderPath: source.spriteFolderPath,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+      return this.getById(newCharId);
+    },
+
     // ── Personas ──
 
     async listPersonas() {
@@ -122,6 +140,34 @@ export function createCharactersStorage(db: DB) {
 
     async removePersona(id: string) {
       await db.delete(personas).where(eq(personas.id, id));
+    },
+
+    async duplicatePersona(id: string) {
+      const source = await this.getPersona(id);
+      if (!source) return null;
+      const newPId = newId();
+      const timestamp = now();
+      await db.insert(personas).values({
+        id: newPId,
+        name: `${source.name || "Persona"} (Copy)`,
+        comment: source.comment ?? "",
+        description: source.description ?? "",
+        personality: source.personality ?? "",
+        scenario: source.scenario ?? "",
+        backstory: source.backstory ?? "",
+        appearance: source.appearance ?? "",
+        avatarPath: source.avatarPath,
+        isActive: "false",
+        nameColor: source.nameColor ?? "",
+        dialogueColor: source.dialogueColor ?? "",
+        boxColor: source.boxColor ?? "",
+        personaStats: source.personaStats ?? "",
+        altDescriptions: source.altDescriptions ?? "[]",
+        tags: source.tags ?? "[]",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+      return this.getPersona(newPId);
     },
 
     async updatePersona(

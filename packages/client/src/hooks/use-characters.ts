@@ -73,6 +73,14 @@ export function useDeleteCharacter() {
   });
 }
 
+export function useDuplicateCharacter() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post(`/characters/${id}/duplicate`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: characterKeys.list() }),
+  });
+}
+
 // ── Character Sprites ──
 
 export interface SpriteInfo {
@@ -174,6 +182,14 @@ export function useDeletePersona() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.delete(`/characters/personas/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: characterKeys.personas }),
+  });
+}
+
+export function useDuplicatePersona() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post(`/characters/personas/${id}/duplicate`, {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: characterKeys.personas }),
   });
 }
