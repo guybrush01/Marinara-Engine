@@ -62,6 +62,13 @@ Current stable release: **[v1.5.0](https://github.com/Pasta-Devs/Marinara-Engine
 
 Detailed release notes now live in [CHANGELOG.md](CHANGELOG.md). Tagged releases use the `vX.Y.Z` format, and GitHub Releases remain the publication mechanism for installers, release notes, and update metadata.
 
+## Plans
+
+- Adding Marinara Engine as a free-to-download app on both Android and iPhone mobiles.
+- An engine feature allowing you to set up full games with your curated sprites, soundtracks, scenarios, etc., and share them with others.
+- Different supported game modes, including more tabletop-like gameplay, point-and-click games, and classic text adventures.
+- Overall improvements and addressing any bugs that pop up along the way.
+
 ## Project Docs
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contributor workflow, validation, versioning, and release steps

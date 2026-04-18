@@ -2,7 +2,42 @@
 
 This file is the release-notes source of truth for Marinara Engine. Reuse these entries when publishing GitHub Releases for tags in the `vX.Y.Z` format.
 
-## [Unreleased]
+## v1.5.0
+
+### Added
+
+- Introducing the new **Game Mode**! A cross between a classic roleplay and a visual novel, fully driven by the AI GM! Embark on adventures either solo or with a party of characters of your choice. Or perhaps have one of your characters DM the game for you and others? The games span multiple sessions, and *anything* can happen. The sky is the limit. Well, I guess your wallet, too.
+  - Follow an easy and quick game setup wizard to customize your game, or ask the model to come up with the ideas for you.
+  - The game's UI is a cross between RPGs (think Baldur's Gate) and visual novels. Witness dynamically changing dialogues, backgrounds, sprites, ambiance, music, sounds, and weather; all based on your current scene. The mode supports sprites and will show them with different expressions. You have an item inventory, an automatically updated journal storing information about your adventure, and an option to talk to your party whenever you feel like simply chatting with them instead of progressing.
+  - Your party, and you, all have unique character cards, secrets, and goals to achieve. Remember to keep morale high.
+  - Do dice rolls yourself or let the GM handle those for you.
+  - Play with the interactive widgets, travel to different locations via a map, build a reputation with NPCs and factions, and explore a dynamically changing world.
+  - Everything is handled on the backend. You just sit back, relax, and enjoy the experience.
+  - Seriously, just try it. It's fun. I put a lot of time and effort into it, so you'd better enjoy it, or I'll explode.
+- Automated sprite generation for expressions and full-body poses in character cards. These can be used for both roleplay and game modes.
+- Saved presets for starting new roleplays and conversations.
+- Option to save parameters (samplers) per connection.
+- Select, duplicate, and manage multiple chats/characters/lorebooks/personas/etc. at once.
+- More filters to sort by in lorebooks, and added an ability to lock entries from being edited by agents.
+- You may now generate images based on the chat anytime by pressing the "Illustrate" button in the Gallery.
+- Spellbooks were added as a separate lorebook category, used in combat.
+- Other minor things I probably forgot about, have fun discovering them on your own.
+
+### Fixed
+
+- Expression Engine fix that prevented sprites from being generated.
+- Messages will no longer disappear and reappear only upon page refresh.
+- Scenes created out of conversations now inherit all the parameters from their original chat.
+- Fixed a "niche advanced parameter bug", if you know, you know.
+- Added full markdown support for roleplays.
+- Various Termux/iPhone native fixes for both installation and UI.
+- Text formatting with asterisks is now fixed.
+- Bettered image generation support.
+- Lorebook entries not working in scenes.
+- Numbered lists now display correctly.
+- You can now select a folder where your backup will be saved.
+- No more random scroll-ups when editing lorebooks.
+- Additional minor fixes that I can't be bothered enough to list, I want a break.
 
 ## [1.4.8]
 
@@ -31,23 +66,6 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 - Cross-post redirect handling corrected.
 - Restored local data-path compatibility so existing installs continue to resolve storage under `packages/server/data`.
 - Update checks now resolve the newest GitHub `v*` tag even when `releases/latest` is stale.
-
-# v1.5.0
-
-## Features
-- Introducing the new **Game Mode**! A cross between a classic roleplay and a visual novel, fully driven by the AI GM! Embark on adventures either solo or with a party of characters of your choice. Or perhaps have one of your characters DM the game for you and others? The games span multiple sessions, and *anything* can happen. The sky is the limit. Well, I guess your wallet, too.
-- Follow an easy and quick game setup wizard to customize your game, or ask the model to come up with the ideas for you.
-- The game's UI is a cross between RPGs (think Baldur's Gate) and visual novels. Witness dynamically changing dialogues, backgrounds, sprites, ambiance, music, sounds, and weather; all based on your current scene. The mode supports sprites and will show them with different expressions. You have an item inventory, an automatically updated journal storing information about your adventure, and an option to talk to your party whenever you feel like simply chatting with them instead of progressing.
-- Your party, and you, all have unique character cards, secrets, and goals to achieve. Remember to keep morale high.
-- Do dice rolls yourself or let the GM handle those for you. 
-
-## Fixes
-
-## Plans
-- Adding Marinara Engine as a free-to-download app on both Android and iPhone mobiles.
-- An engine feature allowing you to set up full games with your curated sprites, soundtracks, scenarios, etc., and share them with others.
-- Different supported game modes, including more tabletop-like gameplay, point-and-click games, and classic text adventures.
-- Overall improvements and addressing any bugs that pop up along the way.
 
 ## [1.4.7]
 
