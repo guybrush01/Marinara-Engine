@@ -3288,8 +3288,10 @@ export async function generateRoutes(app: FastifyInstance) {
           const plotData = plotResult.data as Record<string, unknown>;
           const agentConfigId = secretPlotAgent?.id ?? plotResult.agentId;
 
-          // Persist to agent memory so swipes/regens read from it
-          try {
+          // Skip persisting memory for builtin agents (they have no DB config row)
+          if (!agentConfigId?.startsWith("builtin:")) {
+            // Persist to agent memory so swipes/regens read from it
+            try {
             if (plotData.overarchingArc) {
               await agentsStore.setMemory(agentConfigId, input.chatId, "overarchingArc", plotData.overarchingArc);
             }
@@ -3318,8 +3320,9 @@ export async function generateRoutes(app: FastifyInstance) {
             console.log(
               `[secret-plot-driver] Persisted pre-gen state — arc: ${plotData.overarchingArc ? "updated" : "unchanged"}, directions: ${Array.isArray(plotData.sceneDirections) ? (plotData.sceneDirections as any[]).filter((d: any) => !d.fulfilled).length : 0} active, pacing: ${plotData.pacing ?? "unknown"}`,
             );
-          } catch (persistErr) {
-            console.error("[secret-plot-driver] Failed to persist state:", persistErr);
+            } catch (persistErr) {
+              console.error("[secret-plot-driver] Failed to persist state:", persistErr);
+            }
           }
         }
 
