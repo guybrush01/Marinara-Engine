@@ -1876,7 +1876,7 @@ export async function generateRoutes(app: FastifyInstance) {
         });
       }
 
-      // Built-in agents with no DB row → use defaults only if explicitly in the per-chat list
+      // Built-in agents → create DB config if first use (for persistent memory), then use defaults
       const resolvedTypes = new Set(resolvedAgents.map((a) => a.type));
       const builtInFallbacks =
         chatEnableAgents && hasPerChatAgentList
@@ -1887,10 +1887,31 @@ export async function generateRoutes(app: FastifyInstance) {
             })
           : [];
       for (const builtIn of builtInFallbacks) {
+        // Create DB entry for this built-in agent type if it doesn't exist
+        // This allows it to have persistent memory via agent_memory table
+        const existing = await agentsStore.getByType(builtIn.id);
+        let agentConfigId: string;
+        if (existing) {
+          agentConfigId = existing.id;
+        } else {
+          const newConfig = await agentsStore.create({
+            type: builtIn.id,
+            name: builtIn.name,
+            description: builtIn.description,
+            phase: builtIn.phase,
+            enabled: true,
+            connectionId: null,
+            promptTemplate: "",
+            settings: builtIn.defaultInjectAsSection ? { injectAsSection: true } : {},
+          });
+          if (!newConfig) throw new Error(`Failed to create agent config for ${builtIn.id}`);
+          agentConfigId = newConfig.id;
+        }
+
         // Built-in agents also respect the default-for-agents connection
         const builtInCached = defaultAgentConn ? agentProviderCache.get(defaultAgentConn.id) : null;
         resolvedAgents.push({
-          id: `builtin:${builtIn.id}`,
+          id: agentConfigId,
           type: builtIn.id,
           name: builtIn.name,
           phase: builtIn.phase,
@@ -3288,10 +3309,8 @@ export async function generateRoutes(app: FastifyInstance) {
           const plotData = plotResult.data as Record<string, unknown>;
           const agentConfigId = secretPlotAgent?.id ?? plotResult.agentId;
 
-          // Skip persisting memory for builtin agents (they have no DB config row)
-          if (!agentConfigId?.startsWith("builtin:")) {
-            // Persist to agent memory so swipes/regens read from it
-            try {
+          // Persist to agent memory so swipes/regens read from it
+          try {
             if (plotData.overarchingArc) {
               await agentsStore.setMemory(agentConfigId, input.chatId, "overarchingArc", plotData.overarchingArc);
             }
@@ -3320,9 +3339,8 @@ export async function generateRoutes(app: FastifyInstance) {
             console.log(
               `[secret-plot-driver] Persisted pre-gen state — arc: ${plotData.overarchingArc ? "updated" : "unchanged"}, directions: ${Array.isArray(plotData.sceneDirections) ? (plotData.sceneDirections as any[]).filter((d: any) => !d.fulfilled).length : 0} active, pacing: ${plotData.pacing ?? "unknown"}`,
             );
-            } catch (persistErr) {
-              console.error("[secret-plot-driver] Failed to persist state:", persistErr);
-            }
+          } catch (persistErr) {
+            console.error("[secret-plot-driver] Failed to persist state:", persistErr);
           }
         }
 
