@@ -275,7 +275,7 @@ export async function charactersRoutes(app: FastifyInstance) {
 
     const avatarsDir = join(DATA_DIR, "avatars");
     await mkdir(avatarsDir, { recursive: true });
-    const filename = `${id}.${ext}`;
+    const filename = `character-${id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
     const filepath = join(avatarsDir, filename);
     await writeFile(filepath, Buffer.from(base64, "base64"));
 

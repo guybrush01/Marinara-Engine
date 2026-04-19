@@ -10,7 +10,7 @@ set "INSTALL_ERROR="
 echo.
 echo  +==========================================+
 echo  ^|   Marinara Engine - Windows Installer     ^|
-echo  ^|   v1.5.1                                  ^|
+echo  ^|   v1.5.2                                  ^|
 
 echo  +==========================================+
 echo.
@@ -65,6 +65,10 @@ echo  [OK] Node.js installed successfully
 echo  [OK] Node.js found:
 node -v
 
+set "PNPM_VERSION=10.30.3"
+for /f "usebackq delims=" %%i in (`node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).packageManager?.split('@')[1] || '10.30.3'"`) do set "PNPM_VERSION=%%i"
+set "PNPM_USE_COREPACK="
+
 :: -- Git --
 where git >nul 2>&1
 if errorlevel 1 goto :install_git
@@ -97,21 +101,35 @@ echo  [OK] Git installed successfully
 echo  [OK] Git found
 
 :: -- Install pnpm if needed --
-set "PNPM_VERSION=10.30.3"
-where pnpm >nul 2>&1
-if errorlevel 1 goto :install_pnpm
-goto :pnpm_ok
+where corepack >nul 2>&1
+if not errorlevel 1 goto :install_pnpm_corepack
 
-:install_pnpm
+where pnpm >nul 2>&1
+if errorlevel 1 goto :install_pnpm_npm
+for /f "usebackq delims=" %%i in (`pnpm -v`) do set "CURRENT_PNPM_VERSION=%%i"
+if /I "%CURRENT_PNPM_VERSION%"=="%PNPM_VERSION%" goto :pnpm_ok
+
+:install_pnpm_npm
 echo  [..] Installing pnpm %PNPM_VERSION%...
 call npm install -g pnpm@%PNPM_VERSION%
 if errorlevel 1 (
-    set "INSTALL_ERROR=Failed to install pnpm. Please run: npm install -g pnpm@%PNPM_VERSION%"
+    set "INSTALL_ERROR=Failed to install pnpm %PNPM_VERSION%. Please run: npm install -g pnpm@%PNPM_VERSION%"
     goto :fatal
 )
+goto :pnpm_ok
+
+:install_pnpm_corepack
+echo  [..] Aligning pnpm to %PNPM_VERSION% via Corepack...
+corepack enable >nul 2>&1
+call corepack prepare pnpm@%PNPM_VERSION% --activate
+if errorlevel 1 (
+    echo  [WARN] Corepack could not activate pnpm %PNPM_VERSION% - falling back to npm...
+    goto :install_pnpm_npm
+)
+set "PNPM_USE_COREPACK=1"
 
 :pnpm_ok
-echo  [OK] pnpm found
+echo  [OK] pnpm %PNPM_VERSION% ready
 
 :: -- Clone repository --
 echo.
@@ -135,7 +153,7 @@ git pull
 :: -- Install dependencies --
 echo.
 echo  [..] Installing dependencies (this may take a few minutes)...
-call pnpm install
+call :run_pnpm install
 if %errorlevel% neq 0 (
     set "INSTALL_ERROR=Failed to install dependencies."
     goto :fatal
@@ -145,7 +163,7 @@ echo  [OK] Dependencies installed
 :: -- Build --
 echo.
 echo  [..] Building Marinara Engine...
-call pnpm build
+call :run_pnpm build
 if %errorlevel% neq 0 (
     set "INSTALL_ERROR=Build failed."
     goto :fatal
@@ -154,7 +172,7 @@ echo  [OK] Build complete
 
 :: -- Sync database --
 echo  [..] Setting up database...
-call pnpm db:push 2>nul
+call :run_pnpm db:push 2>nul
 echo  [OK] Database ready
 
 :: -- Create desktop shortcut --
@@ -168,6 +186,7 @@ set "VBS=%TEMP%\create_shortcut.vbs"
     echo Set oLink = oWS.CreateShortcut^(sLinkFile^)
     echo oLink.TargetPath = "%INSTALL_DIR%\start.bat"
     echo oLink.WorkingDirectory = "%INSTALL_DIR%"
+    echo oLink.IconLocation = "%INSTALL_DIR%\installer\app-icon.ico,0"
     echo oLink.Description = "Marinara Engine - AI Chat ^& Roleplay"
     echo oLink.Save
 ) > "%VBS%"
@@ -191,6 +210,14 @@ echo  ==========================================
 echo.
 pause
 goto :eof
+
+:run_pnpm
+if defined PNPM_USE_COREPACK (
+    call corepack pnpm %*
+) else (
+    call pnpm %*
+)
+exit /b %errorlevel%
 
 :: -- Fatal error handler: always visible, never silent --
 :fatal

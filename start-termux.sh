@@ -72,21 +72,39 @@ fi
 
 # ── Check pnpm ──
 PNPM_VERSION=$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).packageManager?.split('@')[1] || '10.30.3'")
+PNPM_USE_COREPACK=0
+
+run_pnpm() {
+    if [ "$PNPM_USE_COREPACK" = "1" ]; then
+        corepack pnpm "$@"
+    else
+        pnpm "$@"
+    fi
+}
 
 if command -v corepack &> /dev/null; then
     corepack enable >/dev/null 2>&1 || true
-fi
-
-CURRENT_PNPM_VERSION=$(pnpm -v 2>/dev/null || true)
-if [ -z "$CURRENT_PNPM_VERSION" ] || [ "$CURRENT_PNPM_VERSION" != "$PNPM_VERSION" ]; then
-    echo "  [..] Aligning pnpm to ${PNPM_VERSION}..."
-    if command -v corepack &> /dev/null; then
-        corepack prepare "pnpm@${PNPM_VERSION}" --activate >/dev/null
+    echo "  [..] Aligning pnpm to ${PNPM_VERSION} via Corepack..."
+    if corepack prepare "pnpm@${PNPM_VERSION}" --activate >/dev/null 2>&1; then
+        PNPM_USE_COREPACK=1
     else
+        echo "  [WARN] Corepack could not activate pnpm ${PNPM_VERSION} - falling back to npm..."
+        npm install -g "pnpm@${PNPM_VERSION}" >/dev/null
+    fi
+else
+    CURRENT_PNPM_VERSION=$(pnpm -v 2>/dev/null || true)
+    if [ -z "$CURRENT_PNPM_VERSION" ] || [ "$CURRENT_PNPM_VERSION" != "$PNPM_VERSION" ]; then
+        echo "  [..] Aligning pnpm to ${PNPM_VERSION}..."
         npm install -g "pnpm@${PNPM_VERSION}" >/dev/null
     fi
 fi
-echo "  [OK] pnpm ${PNPM_VERSION} ready"
+
+CURRENT_PNPM_VERSION=$(run_pnpm --version 2>/dev/null || true)
+if [ -z "$CURRENT_PNPM_VERSION" ] || [ "$CURRENT_PNPM_VERSION" != "$PNPM_VERSION" ]; then
+    echo "  [ERROR] Failed to make pnpm ${PNPM_VERSION} available."
+    exit 1
+fi
+echo "  [OK] pnpm ${CURRENT_PNPM_VERSION} ready"
 
 # ── Auto-update from Git ──
 if [ -d ".git" ]; then
@@ -117,7 +135,7 @@ if [ -d ".git" ]; then
             else
                 echo "  [OK] Updated to $(git log -1 --format='%h %s' 2>/dev/null)"
                 echo "  [..] Reinstalling dependencies..."
-                pnpm install
+                run_pnpm install
                 rm -rf packages/shared/dist packages/server/dist packages/client/dist
                 rm -f packages/shared/tsconfig.tsbuildinfo packages/server/tsconfig.tsbuildinfo packages/client/tsconfig.tsbuildinfo
             fi
@@ -153,14 +171,14 @@ if [ -f "packages/shared/dist/constants/defaults.js" ]; then
     if [ -n "$SOURCE_VER" ] && [ -n "$DIST_VER" ] && [ "$SOURCE_VER" != "$DIST_VER" ]; then
         echo "  [WARN] Version mismatch: source v$SOURCE_VER but dist has v$DIST_VER"
         echo "  [..] Forcing rebuild to apply update..."
-        pnpm install
+        run_pnpm install
         rm -rf packages/shared/dist packages/server/dist packages/client/dist
         rm -f packages/shared/tsconfig.tsbuildinfo packages/server/tsconfig.tsbuildinfo packages/client/tsconfig.tsbuildinfo
     fi
     if [ -n "$SOURCE_COMMIT" ] && [ "$SOURCE_COMMIT" != "$DIST_COMMIT" ]; then
         echo "  [WARN] Build commit mismatch: source $SOURCE_COMMIT but dist has ${DIST_COMMIT:-<missing>}"
         echo "  [..] Forcing rebuild to apply update..."
-        pnpm install
+        run_pnpm install
         rm -rf packages/shared/dist packages/server/dist packages/client/dist
         rm -f packages/shared/tsconfig.tsbuildinfo packages/server/tsconfig.tsbuildinfo packages/client/tsconfig.tsbuildinfo
     fi
@@ -172,7 +190,7 @@ if [ ! -d "node_modules" ] || [ "$TERMUX_FORCE_INSTALL" = "1" ]; then
     echo "  [..] Installing dependencies${TERMUX_FORCE_INSTALL:+ (refreshing for platform fix)}..."
     echo "       This may take several minutes on mobile."
     echo ""
-    pnpm install
+    run_pnpm install
 fi
 
 # ── Ensure SQLite driver for Termux ──
@@ -194,7 +212,7 @@ else
         # better-sqlite3 is already declared in optionalDependencies —
         # just ensure it's installed without rewriting package.json.
         echo "  [..] Installing better-sqlite3..."
-        pnpm install --filter @marinara-engine/server 2>&1 || true
+        run_pnpm install --filter @marinara-engine/server 2>&1 || true
         BS3_PKG=$(find node_modules -path "*/better-sqlite3/package.json" -not -path "*/.cache/*" 2>/dev/null | head -1)
         [ -n "$BS3_PKG" ] && BS3_DIR=$(dirname "$BS3_PKG")
     fi
@@ -225,7 +243,7 @@ else
         # sql.js is already declared in optionalDependencies —
         # just ensure it's installed without rewriting package.json.
         if ! node -e "require.resolve('sql.js')" 2>/dev/null; then
-            pnpm install --filter @marinara-engine/server 2>&1 || true
+            run_pnpm install --filter @marinara-engine/server 2>&1 || true
         fi
         export DATABASE_DRIVER="sql.js"
         echo "  [OK] sql.js ready"
@@ -235,28 +253,28 @@ fi
 # ── Build if needed ──
 if [ ! -d "packages/shared/dist" ]; then
     echo "  [..] Building shared types..."
-    pnpm build:shared
+    run_pnpm build:shared
 fi
 if [ ! -d "packages/server/dist" ]; then
     echo "  [..] Building server..."
-    pnpm build:server
+    run_pnpm build:server
 fi
 if [ ! -d "packages/client/dist" ]; then
     echo "  [..] Building client..."
     # Skip tsc type-check on Termux — it OOMs on low-memory devices.
     # Skip PWA service worker — terser minifier OOMs on low-memory devices.
     # Vite doesn't need tsc output (tsconfig has noEmit: true).
-    if ! SKIP_PWA=1 pnpm --filter @marinara-engine/client exec vite build 2>&1; then
+    if ! SKIP_PWA=1 run_pnpm --filter @marinara-engine/client exec vite build 2>&1; then
         echo "  [WARN] Vite build failed — native binaries may not match Node.js $(node -v)."
         echo "  [..] Installing WASM fallback for rollup and retrying..."
-        pnpm --filter @marinara-engine/client add -D @rollup/wasm-node 2>/dev/null || true
-        SKIP_PWA=1 pnpm --filter @marinara-engine/client exec vite build
+        run_pnpm --filter @marinara-engine/client add -D @rollup/wasm-node 2>/dev/null || true
+        SKIP_PWA=1 run_pnpm --filter @marinara-engine/client exec vite build
     fi
 fi
 
 # ── Database schema ──
 echo "  [..] Syncing database schema..."
-pnpm db:push 2>/dev/null || true
+run_pnpm db:push 2>/dev/null || true
 
 # Load .env if present (respects user overrides)
 if [ -f .env ]; then

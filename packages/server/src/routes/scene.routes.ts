@@ -257,7 +257,7 @@ export async function sceneRoutes(app: FastifyInstance) {
 
     // Resolve connection
     const { conn, baseUrl } = await resolveConnection(connections, connectionId, sceneChat.connectionId);
-    const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey);
+    const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey, conn.maxContext, conn.openrouterProvider);
 
     // Build context
     const characterIds: string[] =
@@ -416,7 +416,7 @@ export async function sceneRoutes(app: FastifyInstance) {
     if (!chat) return reply.status(404).send({ error: "Chat not found" });
 
     const { conn, baseUrl } = await resolveConnection(connections, connectionId, chat.connectionId);
-    const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey);
+    const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey, conn.maxContext, conn.openrouterProvider);
 
     const characterIds: string[] =
       typeof chat.characterIds === "string" ? JSON.parse(chat.characterIds) : (chat.characterIds as string[]);

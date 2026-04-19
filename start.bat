@@ -1,5 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
+cd /d "%~dp0"
 title Marinara Engine
 color 0A
 echo.
@@ -24,26 +25,32 @@ for /f "usebackq delims=" %%i in (`node -p "JSON.parse(require('fs').readFileSyn
 
 where corepack >nul 2>&1
 if not errorlevel 1 set "HAS_COREPACK=1"
+set "PNPM_USE_COREPACK="
 
 :: Ensure pnpm is available before any update/install path uses it
-where pnpm >nul 2>&1
-if errorlevel 1 (
-    echo  [..] pnpm not found, installing %PNPM_VERSION%...
-    if defined HAS_COREPACK (
-        corepack enable >nul 2>&1
-        corepack prepare pnpm@%PNPM_VERSION% --activate
-    ) else (
+if defined HAS_COREPACK (
+    echo  [..] Aligning pnpm to %PNPM_VERSION% via Corepack...
+    corepack enable >nul 2>&1
+    call corepack prepare pnpm@%PNPM_VERSION% --activate
+    if errorlevel 1 (
+        echo  [WARN] Corepack could not activate pnpm %PNPM_VERSION% - falling back to npm...
         call npm install -g pnpm@%PNPM_VERSION%
+        if errorlevel 1 echo  [ERROR] Failed to prepare pnpm %PNPM_VERSION%. & pause & exit /b 1
+    ) else (
+        set "PNPM_USE_COREPACK=1"
     )
 ) else (
-    for /f "usebackq delims=" %%i in (`pnpm -v`) do set "CURRENT_PNPM_VERSION=%%i"
-    if /I not "!CURRENT_PNPM_VERSION!"=="%PNPM_VERSION%" (
-        echo  [..] Aligning pnpm to %PNPM_VERSION%...
-        if defined HAS_COREPACK (
-            corepack enable >nul 2>&1
-            corepack prepare pnpm@%PNPM_VERSION% --activate
-        ) else (
+    where pnpm >nul 2>&1
+    if errorlevel 1 (
+        echo  [..] pnpm not found, installing %PNPM_VERSION%...
+        call npm install -g pnpm@%PNPM_VERSION%
+        if errorlevel 1 echo  [ERROR] Failed to install pnpm %PNPM_VERSION%. & pause & exit /b 1
+    ) else (
+        for /f "usebackq delims=" %%i in (`pnpm -v`) do set "CURRENT_PNPM_VERSION=%%i"
+        if /I not "!CURRENT_PNPM_VERSION!"=="%PNPM_VERSION%" (
+            echo  [..] Aligning pnpm to %PNPM_VERSION%...
             call npm install -g pnpm@%PNPM_VERSION%
+            if errorlevel 1 echo  [ERROR] Failed to align pnpm to %PNPM_VERSION%. & pause & exit /b 1
         )
     )
 )
@@ -87,7 +94,7 @@ if /I not "!NEW_HEAD!"=="!TARGET_HEAD!" (
 if "!STASHED!"=="1" git stash pop -q >nul 2>&1
 echo  [OK] Updated to latest version
 echo  [..] Reinstalling dependencies...
-call pnpm install
+call :run_pnpm install
 if exist "packages\shared\dist" rmdir /s /q "packages\shared\dist"
 if exist "packages\server\dist" rmdir /s /q "packages\server\dist"
 if exist "packages\client\dist" rmdir /s /q "packages\client\dist"
@@ -109,7 +116,7 @@ for /f "usebackq delims=" %%i in (`node -e "try{const m=require('./packages/serv
 if not "!SOURCE_VER!"=="" if not "!DIST_VER!"=="" if not "!SOURCE_VER!"=="!DIST_VER!" (
     echo  [WARN] Version mismatch: source v!SOURCE_VER! but dist has v!DIST_VER!
     echo  [..] Forcing rebuild to apply update...
-    call pnpm install
+    call :run_pnpm install
     if exist "packages\shared\dist" rmdir /s /q "packages\shared\dist"
     if exist "packages\server\dist" rmdir /s /q "packages\server\dist"
     if exist "packages\client\dist" rmdir /s /q "packages\client\dist"
@@ -120,7 +127,7 @@ if not "!SOURCE_VER!"=="" if not "!DIST_VER!"=="" if not "!SOURCE_VER!"=="!DIST_
 if not "!SOURCE_COMMIT!"=="" if /I not "!SOURCE_COMMIT!"=="!DIST_COMMIT!" (
     echo  [WARN] Build commit mismatch: source !SOURCE_COMMIT! but dist has !DIST_COMMIT!
     echo  [..] Forcing rebuild to apply update...
-    call pnpm install
+    call :run_pnpm install
     if exist "packages\shared\dist" rmdir /s /q "packages\shared\dist"
     if exist "packages\server\dist" rmdir /s /q "packages\server\dist"
     if exist "packages\client\dist" rmdir /s /q "packages\client\dist"
@@ -136,7 +143,7 @@ echo.
 echo  [..] Installing dependencies (first run)...
 echo      This may take a few minutes.
 echo.
-call pnpm install
+call :run_pnpm install
 if errorlevel 1 echo  [ERROR] Failed to install dependencies. & pause & exit /b 1
 
 :skip_install
@@ -144,15 +151,15 @@ if errorlevel 1 echo  [ERROR] Failed to install dependencies. & pause & exit /b 
 :: Build if needed
 if not exist "packages\shared\dist" (
     echo  [..] Building shared types...
-    call pnpm build:shared
+    call :run_pnpm build:shared
 )
 if not exist "packages\server\dist" (
     echo  [..] Building server...
-    call pnpm build:server
+    call :run_pnpm build:server
 )
 if not exist "packages\client\dist" (
     echo  [..] Building client...
-    call pnpm build:client
+    call :run_pnpm build:client
 )
 
 :: Database migrations are handled automatically at server startup by runMigrations()
@@ -203,3 +210,12 @@ if errorlevel 1 (
     echo.
     pause
 )
+goto :eof
+
+:run_pnpm
+if defined PNPM_USE_COREPACK (
+    call corepack pnpm %*
+) else (
+    call pnpm %*
+)
+exit /b %errorlevel%

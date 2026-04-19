@@ -77,8 +77,15 @@ function computeTooltipStyle(rect: Rect, side: "top" | "bottom" | "left" | "righ
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const isMobile = vw < 640;
-  const TOOLTIP_W = isMobile ? Math.min(vw - 24, 340) : 340;
+  const VIEWPORT_MARGIN = isMobile ? 12 : 16;
+  const TOOLTIP_W = isMobile ? Math.min(vw - VIEWPORT_MARGIN * 2, 340) : Math.min(340, vw - VIEWPORT_MARGIN * 2);
   const GAP = isMobile ? 12 : 16;
+  const available = {
+    right: vw - (rect.left + rect.width + GAP + PAD) - VIEWPORT_MARGIN,
+    left: rect.left - GAP - PAD - VIEWPORT_MARGIN,
+    bottom: vh - (rect.top + rect.height + GAP + PAD) - VIEWPORT_MARGIN,
+    top: rect.top - GAP - PAD - VIEWPORT_MARGIN,
+  };
 
   if (isMobile) {
     // On mobile the game UI is cramped: pin the card to the top or bottom edge
@@ -97,6 +104,8 @@ function computeTooltipStyle(rect: Rect, side: "top" | "bottom" | "left" | "righ
         width: TOOLTIP_W,
         maxHeight: `${Math.max(200, maxHeight)}px`,
         overflowY: "auto",
+        overflowX: "hidden",
+        overscrollBehavior: "contain",
       };
     }
     // Target is in the lower half (e.g. the dialogue box) → anchor card at top
@@ -109,45 +118,77 @@ function computeTooltipStyle(rect: Rect, side: "top" | "bottom" | "left" | "righ
       width: TOOLTIP_W,
       maxHeight: `${maxHeight}px`,
       overflowY: "auto",
+      overflowX: "hidden",
+      overscrollBehavior: "contain",
     };
   }
+
+  const minScrollableHeight = 220;
+  const preferredVerticalSide = available.bottom >= available.top ? "bottom" : "top";
+  let placement = side;
+
+  if (side === "right" && available.right < TOOLTIP_W && available.left >= TOOLTIP_W) {
+    placement = "left";
+  } else if (side === "left" && available.left < TOOLTIP_W && available.right >= TOOLTIP_W) {
+    placement = "right";
+  } else if (side === "bottom" && available.bottom < minScrollableHeight && available.top >= minScrollableHeight) {
+    placement = "top";
+  } else if (side === "top" && available.top < minScrollableHeight && available.bottom >= minScrollableHeight) {
+    placement = "bottom";
+  } else if ((side === "right" || side === "left") && available.right < TOOLTIP_W && available.left < TOOLTIP_W) {
+    placement = preferredVerticalSide;
+  } else if (
+    (side === "top" || side === "bottom") &&
+    available.top < minScrollableHeight &&
+    available.bottom < minScrollableHeight
+  ) {
+    placement = available.right >= available.left ? "right" : "left";
+  }
+
+  let maxHeight = vh - VIEWPORT_MARGIN * 2;
 
   let top = 0;
   let left = 0;
 
-  if (side === "right") {
-    top = rect.top + rect.height / 2;
+  if (placement === "right") {
+    maxHeight = Math.max(minScrollableHeight, vh - VIEWPORT_MARGIN * 2);
+    top = rect.top + rect.height / 2 - maxHeight / 2;
     left = rect.left + rect.width + GAP + PAD;
-    if (left + TOOLTIP_W > vw - 16) {
+    if (left + TOOLTIP_W > vw - VIEWPORT_MARGIN) {
       left = rect.left - TOOLTIP_W - GAP - PAD;
     }
-  } else if (side === "left") {
-    top = rect.top + rect.height / 2;
+  } else if (placement === "left") {
+    maxHeight = Math.max(minScrollableHeight, vh - VIEWPORT_MARGIN * 2);
+    top = rect.top + rect.height / 2 - maxHeight / 2;
     left = rect.left - TOOLTIP_W - GAP - PAD;
-    if (left < 16) {
+    if (left < VIEWPORT_MARGIN) {
       left = rect.left + rect.width + GAP + PAD;
     }
-  } else if (side === "bottom") {
+  } else if (placement === "bottom") {
+    maxHeight = Math.max(minScrollableHeight, Math.min(vh - VIEWPORT_MARGIN * 2, available.bottom));
     top = rect.top + rect.height + GAP + PAD;
     left = rect.left + rect.width / 2 - TOOLTIP_W / 2;
   } else {
-    // top
-    top = rect.top - GAP - PAD - 280; // approximate card height
+    maxHeight = Math.max(minScrollableHeight, Math.min(vh - VIEWPORT_MARGIN * 2, available.top));
+    top = rect.top - GAP - PAD - maxHeight;
     left = rect.left + rect.width / 2 - TOOLTIP_W / 2;
-    if (top < 16) {
+    if (top < VIEWPORT_MARGIN) {
       top = rect.top + rect.height + GAP + PAD;
     }
   }
 
-  left = Math.max(16, Math.min(left, vw - TOOLTIP_W - 16));
-  top = Math.max(16, Math.min(top, vh - 240));
+  left = Math.max(VIEWPORT_MARGIN, Math.min(left, vw - TOOLTIP_W - VIEWPORT_MARGIN));
+  top = Math.max(VIEWPORT_MARGIN, Math.min(top, vh - maxHeight - VIEWPORT_MARGIN));
 
   return {
     position: "fixed",
     top,
     left,
     width: TOOLTIP_W,
-    transform: side === "right" || side === "left" ? "translateY(-50%)" : undefined,
+    maxHeight: `${maxHeight}px`,
+    overflowY: "auto",
+    overflowX: "hidden",
+    overscrollBehavior: "contain",
   };
 }
 
@@ -184,7 +225,7 @@ function TutorialCard({
         <h3 className="text-sm font-semibold text-[var(--foreground)]">{stepData.title}</h3>
       </div>
 
-      <p className="mb-4 text-xs leading-relaxed text-[var(--muted-foreground)]">
+      <p className="mb-4 break-words text-xs leading-relaxed text-[var(--muted-foreground)]">
         {stepData.body.split("\n").map((line, i, arr) => (
           <span key={i}>
             {line.split(/(\*\*[^*]+\*\*)/).map((part, j) =>
@@ -332,7 +373,7 @@ export function GameTutorial({ open, onClose }: GameTutorialProps) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.96 }}
               transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-              className="pointer-events-auto rounded-2xl border border-[var(--border)] bg-[var(--popover)] p-4 shadow-2xl ring-1 ring-[var(--primary)]/20 max-h-[90vh] overflow-y-auto sm:p-5"
+              className="pointer-events-auto rounded-2xl border border-[var(--border)] bg-[var(--popover)] p-4 shadow-2xl ring-1 ring-[var(--primary)]/20 max-h-[90vh] overflow-x-hidden overflow-y-auto sm:p-5"
               style={{ width: Math.min(380, window.innerWidth - 32) }}
             >
               <TutorialCard step={step} stepData={stepData} isLast={isLast} onNext={next} onSkip={onClose} />

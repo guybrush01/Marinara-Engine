@@ -494,6 +494,10 @@
   display: none;
 }
 
+[data-visual-theme="sillytavern"] .rpg-avatar-panel::after {
+  display: none;
+}
+
 [data-visual-theme="sillytavern"] .rpg-char-name {
   background: none;
   -webkit-background-clip: unset;

@@ -30,7 +30,10 @@ import {
 } from "@marinara-engine/shared";
 
 const quantizationSchema = z.enum(["q8_0", "q4_k_m"]);
-const hfRepoSchema = z.string().trim().regex(/^[^/\s]+\/[^/\s]+$/, "Repository must be in owner/repo format");
+const hfRepoSchema = z
+  .string()
+  .trim()
+  .regex(/^[^/\s]+\/[^/\s]+$/, "Repository must be in owner/repo format");
 
 export const sidecarRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("onClose", async () => {
@@ -75,10 +78,7 @@ export const sidecarRoutes: FastifyPluginAsync = async (app) => {
     return { models };
   });
 
-  async function handleDownloadSse(
-    reply: FastifyReply,
-    task: () => Promise<void>,
-  ): Promise<void> {
+  async function handleDownloadSse(reply: FastifyReply, task: () => Promise<void>): Promise<void> {
     reply.hijack();
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",

@@ -369,7 +369,8 @@ export async function spritesRoutes(app: FastifyInstance) {
     const imgModel = conn.model || "";
     const imgBaseUrl = conn.baseUrl || "https://image.pollinations.ai";
     const imgApiKey = conn.apiKey || "";
-    const imgServiceHint = conn.imageService || "";
+    const imgSource = (conn as any).imageGenerationSource || imgModel;
+    const imgServiceHint = conn.imageService || imgSource;
 
     // Build the prompt for an expression sheet or full-body
     const expressionList = expressions.join(", ");

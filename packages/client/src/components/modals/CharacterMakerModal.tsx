@@ -41,6 +41,7 @@ export function CharacterMakerModal({ open, onClose }: Props) {
   const { data: rawConnections } = useConnections();
   const createCharacter = useCreateCharacter();
   const openCharacterDetail = useUIStore((s) => s.openCharacterDetail);
+  const enableStreaming = useUIStore((s) => s.enableStreaming);
 
   const [prompt, setPrompt] = useState("");
   const [connectionId, setConnectionId] = useState("");
@@ -71,6 +72,7 @@ export function CharacterMakerModal({ open, onClose }: Props) {
       for await (const chunk of api.stream("/character-maker/generate", {
         prompt,
         connectionId,
+        streaming: enableStreaming,
       })) {
         fullText += chunk;
         setStreamText(fullText);
@@ -91,7 +93,7 @@ export function CharacterMakerModal({ open, onClose }: Props) {
     } finally {
       setStreaming(false);
     }
-  }, [prompt, connectionId]);
+  }, [prompt, connectionId, enableStreaming]);
 
   const handleSave = async () => {
     if (!generated?.name) return;

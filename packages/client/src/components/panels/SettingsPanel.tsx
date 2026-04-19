@@ -1,7 +1,13 @@
 // ──────────────────────────────────────────────
 // Panel: Settings (polished)
 // ──────────────────────────────────────────────
-import { useUIStore, type InstalledExtension, type VisualTheme } from "../../stores/ui.store";
+import {
+  APP_LANGUAGE_OPTIONS,
+  useUIStore,
+  type InstalledExtension,
+  type RoleplayAvatarStyle,
+  type VisualTheme,
+} from "../../stores/ui.store";
 import { cn, generateClientId } from "../../lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api-client";
@@ -95,6 +101,19 @@ const EXPUNGE_SCOPE_OPTIONS: Array<{ id: ExpungeScope; label: string; descriptio
   },
 ];
 
+const ROLEPLAY_AVATAR_STYLE_OPTIONS: Array<{ id: RoleplayAvatarStyle; label: string; desc: string }> = [
+  {
+    id: "circles",
+    label: "Small Circles",
+    desc: "Compact portrait bubbles beside each roleplay message.",
+  },
+  {
+    id: "panel",
+    label: "Glued Side Panel",
+    desc: "A taller portrait strip fused into the message bubble.",
+  },
+];
+
 // Module-level set survives component remounts (e.g. mobile AnimatePresence unmount/remount)
 const mountedSettingsTabs = new Set<string>();
 
@@ -146,6 +165,8 @@ export function SettingsPanel() {
   );
 }
 function GeneralSettings() {
+  const language = useUIStore((s) => s.language);
+  const setLanguage = useUIStore((s) => s.setLanguage);
   const enableStreaming = useUIStore((s) => s.enableStreaming);
   const setEnableStreaming = useUIStore((s) => s.setEnableStreaming);
   const streamingSpeed = useUIStore((s) => s.streamingSpeed);
@@ -170,6 +191,28 @@ function GeneralSettings() {
   return (
     <div className="flex flex-col gap-3">
       <div className="text-xs text-[var(--muted-foreground)]">General application settings.</div>
+
+      <label className="flex flex-col gap-1">
+        <span className="inline-flex items-center gap-1 text-xs font-medium">
+          Language
+          <HelpTooltip text="Choose the app language. Only English is available right now, but this setting is persisted so future translation PRs can extend it cleanly." />
+        </span>
+        <select
+          value={language}
+          onChange={(e) => setLanguage(e.target.value as (typeof APP_LANGUAGE_OPTIONS)[number]["id"])}
+          className="rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs outline-none ring-1 ring-transparent transition-shadow focus:ring-[var(--primary)]"
+        >
+          {APP_LANGUAGE_OPTIONS.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <p className="text-[0.625rem] text-[var(--muted-foreground)]">
+          English is the only bundled language for now. Future translations can add more options here without changing
+          the settings shape.
+        </p>
+      </label>
 
       <ToggleSetting
         label="Enable streaming responses"
@@ -377,6 +420,8 @@ function AppearanceSettings() {
   const setChatFontColor = useUIStore((s) => s.setChatFontColor);
   const chatFontOpacity = useUIStore((s) => s.chatFontOpacity);
   const setChatFontOpacity = useUIStore((s) => s.setChatFontOpacity);
+  const roleplayAvatarStyle = useUIStore((s) => s.roleplayAvatarStyle);
+  const setRoleplayAvatarStyle = useUIStore((s) => s.setRoleplayAvatarStyle);
   const textStrokeWidth = useUIStore((s) => s.textStrokeWidth);
   const setTextStrokeWidth = useUIStore((s) => s.setTextStrokeWidth);
   const textStrokeColor = useUIStore((s) => s.textStrokeColor);
@@ -687,6 +732,57 @@ function AppearanceSettings() {
             Reset to default
           </button>
         </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-1.5">
+          <Image size="0.75rem" className="text-[var(--muted-foreground)]" />
+          <span className="text-xs font-medium">Roleplay Avatars</span>
+          <HelpTooltip text="Choose how avatars sit next to roleplay messages. Small Circles keeps the current compact layout. Glued Side Panel embeds a larger portrait strip into the message bubble itself." />
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {ROLEPLAY_AVATAR_STYLE_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              onClick={() => setRoleplayAvatarStyle(opt.id)}
+              className={cn(
+                "flex flex-col items-start gap-2 rounded-lg border p-3 text-left text-xs transition-all",
+                roleplayAvatarStyle === opt.id
+                  ? "border-[var(--primary)] bg-[var(--primary)]/10 ring-1 ring-[var(--primary)]"
+                  : "border-[var(--border)] hover:border-[var(--primary)]/40",
+              )}
+            >
+              <div className="w-full overflow-hidden rounded-md bg-[var(--secondary)]/80 ring-1 ring-[var(--border)]/70">
+                {opt.id === "circles" ? (
+                  <div className="flex h-14 items-center px-3">
+                    <div className="relative flex-1 rounded-2xl rounded-tl-sm bg-black/25 px-3 py-2">
+                      <div className="absolute left-2 top-2 h-2.5 w-2.5 rounded-full bg-gradient-to-br from-rose-400 to-orange-300 shadow-[0_0_0_2px_rgba(255,255,255,0.16)]" />
+                      <div className="ml-4 h-1.5 w-14 rounded-full bg-white/20" />
+                      <div className="mt-1.5 ml-4 h-1.5 w-20 rounded-full bg-white/12" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex h-14 items-stretch overflow-hidden">
+                    <div className="relative w-14 overflow-hidden border-r border-white/8 bg-gradient-to-b from-rose-400/60 via-orange-300/45 to-transparent">
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[32%] backdrop-blur-[4px] [mask-image:linear-gradient(to_bottom,transparent_0%,rgba(0,0,0,0.25)_28%,rgba(0,0,0,0.8)_100%)] [-webkit-mask-image:linear-gradient(to_bottom,transparent_0%,rgba(0,0,0,0.25)_28%,rgba(0,0,0,0.8)_100%)]" />
+                      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0)_0%,rgba(255,255,255,0)_72%,rgba(113,113,122,0.84)_92%,rgba(113,113,122,1)_100%)]" />
+                    </div>
+                    <div className="flex-1 px-3 py-2">
+                      <div className="h-1.5 w-14 rounded-full bg-white/20" />
+                      <div className="mt-1.5 h-1.5 w-20 rounded-full bg-white/12" />
+                    </div>
+                  </div>
+                )}
+              </div>
+              <span className="font-semibold">{opt.label}</span>
+              <span className="text-[0.625rem] leading-tight text-[var(--muted-foreground)]">{opt.desc}</span>
+            </button>
+          ))}
+        </div>
+        <p className="text-[0.625rem] text-[var(--muted-foreground)]">
+          The larger panel crops portraits from the top on short messages and fades them back into the bubble background
+          on taller ones.
+        </p>
       </div>
 
       {/* ── Effects ── */}

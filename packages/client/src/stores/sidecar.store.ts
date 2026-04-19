@@ -62,7 +62,7 @@ function shouldKeepPolling(state: Pick<SidecarState, "status" | "config" | "infe
     return true;
   }
 
-  if (state.status === "downloaded" && (state.config.useForTrackers || state.config.useForGameScene) && !state.inferenceReady) {
+  if (state.status === "downloaded" && state.config.useForGameScene && !state.inferenceReady) {
     return true;
   }
 
@@ -251,7 +251,9 @@ export const useSidecarStore = create<SidecarState>((set, get) => ({
   listHuggingFaceModels: async (repo) => {
     set({ customModelsLoading: true, customModelsError: null });
     try {
-      const response = await api.post<{ models: SidecarCustomModelEntry[] }>("/sidecar/models/list-huggingface", { repo });
+      const response = await api.post<{ models: SidecarCustomModelEntry[] }>("/sidecar/models/list-huggingface", {
+        repo,
+      });
       set({ customModels: response.models, customModelsLoading: false, customModelsError: null });
       return response.models;
     } catch (error) {

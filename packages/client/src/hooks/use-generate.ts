@@ -13,12 +13,13 @@ function showError(msg: string) {
 }
 import { useChatStore } from "../stores/chat.store";
 import { useAgentStore } from "../stores/agent.store";
+import { useGameModeStore } from "../stores/game-mode.store";
 import { useGameStateStore } from "../stores/game-state.store";
 import { useUIStore } from "../stores/ui.store";
 import { chatKeys } from "./use-chats";
 import { characterKeys } from "./use-characters";
 import { playNotificationPing } from "../lib/notification-sound";
-import type { Chat, Message } from "@marinara-engine/shared";
+import type { Chat, GameMap, Message } from "@marinara-engine/shared";
 
 function sortMessagesByCreatedAt(messages: Message[]): Message[] {
   return [...messages].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -125,6 +126,43 @@ async function refreshMessagesAuthoritatively(
     } else {
       upsertPersistedMessages(qc, chatId, persisted);
     }
+  }
+}
+
+function parseChatMetadata(metadata: Chat["metadata"] | string | null | undefined): Record<string, unknown> {
+  if (!metadata) return {};
+  if (typeof metadata === "string") {
+    try {
+      return JSON.parse(metadata) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+  return metadata as Record<string, unknown>;
+}
+
+function applyGameMapUpdate(qc: QueryClient, chatId: string, map: GameMap) {
+  qc.setQueryData<Chat | undefined>(chatKeys.detail(chatId), (current) => {
+    if (!current) return current;
+    return {
+      ...current,
+      metadata: {
+        ...parseChatMetadata(current.metadata as Chat["metadata"] | string),
+        gameMap: map,
+      } as Chat["metadata"],
+    };
+  });
+
+  const chatStore = useChatStore.getState();
+  if (chatStore.activeChat?.id === chatId) {
+    chatStore.setActiveChat({
+      ...chatStore.activeChat,
+      metadata: {
+        ...parseChatMetadata(chatStore.activeChat.metadata as Chat["metadata"] | string),
+        gameMap: map,
+      } as Chat["metadata"],
+    });
+    useGameModeStore.getState().setCurrentMap(map);
   }
 }
 
@@ -270,9 +308,11 @@ export function useGenerate() {
       // immediately, we feed them character-by-character from a queue
       // at a controlled rate so the text "types out" smoothly.
       // Speed is controlled by the user's streamingSpeed setting (1–100).
-      // Conversation mode: always disable streaming — messages appear complete.
+      // Conversation mode still renders complete messages, but the transport
+      // should follow the user's streaming preference.
       const isConversationMode = useChatStore.getState().activeChat?.mode === "conversation";
-      const streamingEnabled = isConversationMode ? false : useUIStore.getState().enableStreaming;
+      const transportStreaming = useUIStore.getState().enableStreaming;
+      const streamingEnabled = isConversationMode ? false : transportStreaming;
       let fullBuffer = ""; // What the user sees (or accumulates silently when streaming is off)
       let pendingText = ""; // Tokens waiting to be typed out
       let receivedContent = false; // Whether any actual message content was received
@@ -325,7 +365,7 @@ export function useGenerate() {
         fullBuffer += pendingText;
         pendingText = "";
         typingActive = false;
-        if (fullBuffer && isActiveChat()) setStreamBuffer(fullBuffer);
+        if (streamingEnabled && fullBuffer && isActiveChat()) setStreamBuffer(fullBuffer);
       };
 
       const startTypewriter = () => {
@@ -358,7 +398,6 @@ export function useGenerate() {
       try {
         const debugMode = useUIStore.getState().debugMode;
         const userStatus = useUIStore.getState().userStatus;
-        const streaming = isConversationMode ? false : useUIStore.getState().enableStreaming;
 
         // Flush any pending game-state widget edits so the server sees them before committing
         const flushPatch = useGameStateStore.getState().flushPatch;
@@ -366,7 +405,7 @@ export function useGenerate() {
 
         for await (const event of api.streamEvents(
           "/generate",
-          { ...params, debugMode, userStatus, streaming },
+          { ...params, debugMode, userStatus, streaming: transportStreaming },
           abortController.signal,
         )) {
           switch (event.type) {
@@ -798,6 +837,12 @@ export function useGenerate() {
               break;
             }
 
+            case "game_map_update": {
+              const map = event.data as GameMap | null;
+              if (map) applyGameMapUpdate(qc, params.chatId, map);
+              break;
+            }
+
             case "chat_summary": {
               // Refresh the chat detail so the summary popover picks up the new value
               qc.invalidateQueries({ queryKey: chatKeys.detail(params.chatId) });
@@ -1067,7 +1112,7 @@ export function useGenerate() {
           });
         }
         // Final flush — ensure full content is set (only for the viewed chat)
-        if (isActiveChat()) setStreamBuffer(fullBuffer + pendingText);
+        if (streamingEnabled && isActiveChat()) setStreamBuffer(fullBuffer + pendingText);
       } catch (error) {
         // Flush everything instantly on error so user sees what arrived
         flushTypewriterBuffer();
@@ -1283,7 +1328,7 @@ export function useGenerate() {
         let hasError = false;
         for await (const event of api.streamEvents(
           "/generate/retry-agents",
-          { chatId, agentTypes },
+          { chatId, agentTypes, streaming: useUIStore.getState().enableStreaming },
           abortController.signal,
         )) {
           switch (event.type) {
@@ -1424,6 +1469,11 @@ export function useGenerate() {
               } else {
                 setGameState(patch as any);
               }
+              break;
+            }
+            case "game_map_update": {
+              const map = event.data as GameMap | null;
+              if (map) applyGameMapUpdate(qc, chatId, map);
               break;
             }
             case "illustration": {

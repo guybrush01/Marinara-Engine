@@ -317,7 +317,7 @@ export function AgentsPanel() {
         </>
       ) : (
         <>
-          <PanelSection title="Active Agents" icon={<Sparkles size="0.8125rem" />}>
+          <PanelSection title="Enabled Agents" icon={<Sparkles size="0.8125rem" />}>
             <div className="mb-1.5 text-[0.625rem] text-[var(--muted-foreground)]">
               Built-ins default to active unless explicitly disabled in their config.
             </div>
@@ -327,7 +327,7 @@ export function AgentsPanel() {
               activeAgents.map((agent) => renderAgentCard({ ...agent, openAgentDetail }))
             )}
           </PanelSection>
-          <PanelSection title="Inactive Agents" icon={<Sparkles size="0.8125rem" />}>
+          <PanelSection title="Disabled Agents" icon={<Sparkles size="0.8125rem" />}>
             {!inactiveAgents.length ? (
               <p className="px-1 py-2 text-[0.625rem] text-[var(--muted-foreground)]">No inactive agents.</p>
             ) : (
@@ -361,7 +361,10 @@ export function AgentsPanel() {
               return (
                 <div
                   key={agent.id}
-                  className="flex items-start gap-2.5 rounded-lg p-2 transition-colors hover:bg-[var(--sidebar-accent)]"
+                  className={cn(
+                    "flex items-start gap-2.5 rounded-lg p-2 transition-colors hover:bg-[var(--sidebar-accent)]",
+                    agent.enabled === "false" && "opacity-55",
+                  )}
                 >
                   <Sparkles size="0.875rem" className="mt-0.5 shrink-0 text-[var(--primary)]" />
                   <button className="min-w-0 flex-1 text-left" onClick={() => openAgentDetail(agent.id)}>
@@ -370,16 +373,6 @@ export function AgentsPanel() {
                       {agent.description || "No description"}
                     </div>
                   </button>
-                  <span
-                    className={cn(
-                      "mt-0.5 rounded px-1.5 py-0.5 text-[0.5625rem]",
-                      agent.enabled === "false"
-                        ? "bg-[var(--secondary)] text-[var(--muted-foreground)]"
-                        : "bg-emerald-500/10 text-emerald-400",
-                    )}
-                  >
-                    {agent.enabled === "false" ? "inactive" : "active"}
-                  </span>
                   <button
                     className="mt-0.5 shrink-0 text-[var(--muted-foreground)] transition-colors hover:text-[var(--primary)]"
                     title="Edit agent"
@@ -491,17 +484,7 @@ function renderAgentCard({
     >
       <Sparkles size="0.875rem" className="mt-0.5 shrink-0 text-[var(--primary)]" />
       <button className="min-w-0 flex-1 text-left" onClick={() => openAgentDetail(custom ? id : type)}>
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-xs font-medium font-mono">{name}</span>
-          <span
-            className={cn(
-              "rounded px-1.5 py-0.5 text-[0.5rem] uppercase tracking-wide",
-              enabled ? "bg-emerald-500/10 text-emerald-400" : "bg-[var(--secondary)] text-[var(--muted-foreground)]",
-            )}
-          >
-            {enabled ? "active" : "inactive"}
-          </span>
-        </div>
+        <div className="truncate text-xs font-medium font-mono">{name}</div>
         <div className="mt-0.5 text-[0.625rem] text-[var(--muted-foreground)] line-clamp-2">
           {description || "No description"}
         </div>

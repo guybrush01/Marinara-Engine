@@ -2092,6 +2092,7 @@ function ReviewTab({ presetId }: { presetId: string }) {
   const [reviewing, setReviewing] = useState(false);
   const [reviewOutput, setReviewOutput] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const enableStreaming = useUIStore((s) => s.enableStreaming);
 
   const startReview = async (connectionId: string) => {
     setReviewing(true);
@@ -2105,6 +2106,7 @@ function ReviewTab({ presetId }: { presetId: string }) {
         body: JSON.stringify({
           presetId,
           connectionId,
+          streaming: enableStreaming,
           focusAreas: ["clarity", "consistency", "coverage", "token_efficiency"],
         }),
       });

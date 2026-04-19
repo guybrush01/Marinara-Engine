@@ -40,13 +40,7 @@ export function GameWidgetPanel({ widgets, position, chatId, constraintsRef }: G
 }
 
 /** Mobile: collapsed emoji pills that expand into full widget on tap. */
-export function MobileWidgetPanel({
-  widgets,
-  position,
-}: {
-  widgets: HudWidget[];
-  position: "hud_left" | "hud_right";
-}) {
+export function MobileWidgetPanel({ widgets, position }: { widgets: HudWidget[]; position: "hud_left" | "hud_right" }) {
   const filtered = widgets.filter((w) => w.position === position && w.type !== "inventory_grid").slice(0, MAX_WIDGETS);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 

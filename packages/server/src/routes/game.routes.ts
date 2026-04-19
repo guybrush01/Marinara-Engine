@@ -9,6 +9,7 @@ import { createConnectionsStorage } from "../services/storage/connections.storag
 import { createCharactersStorage } from "../services/storage/characters.storage.js";
 import { createGameStateStorage } from "../services/storage/game-state.storage.js";
 import { createLLMProvider } from "../services/llm/provider-registry.js";
+import { extractLeadingThinkingBlocks } from "../services/llm/inline-thinking.js";
 import type { ChatMessage, ChatOptions } from "../services/llm/base-provider.js";
 import { rollDice } from "../services/game/dice.service.js";
 import { validateTransition } from "../services/game/state-machine.service.js";
@@ -29,6 +30,7 @@ import {
 import { postProcessSceneResult, type PostProcessContext } from "../services/sidecar/scene-postprocess.js";
 import { buildRecapPrompt } from "../services/game/session.service.js";
 import { buildMapGenerationPrompt } from "../services/game/map.service.js";
+import { syncGameMapPartyPosition } from "../services/game/map-position.service.js";
 import { resolveCombatRound, type CombatantStats } from "../services/game/combat.service.js";
 import { getElementPreset, listElementPresets } from "../services/game/element-reactions.service.js";
 import { generateCombatLoot, generateLootTable } from "../services/game/loot.service.js";
@@ -148,6 +150,7 @@ const setupSchema = z.object({
   chatId: z.string().min(1),
   connectionId: z.string().optional(),
   preferences: z.string().max(5000).default(""),
+  streaming: z.boolean().optional().default(true),
 });
 
 const gameStartSchema = z.object({
@@ -260,13 +263,6 @@ function gameGenOptions(model: string, overrides: Partial<ChatOptions> = {}): Ch
   return { ...base, ...overrides };
 }
 
-/** Strip <think>/<thinking> reasoning tags that some models emit inline. */
-function stripThinkTags(text: string): string {
-  const re = /^(\s*)<(think(?:ing)?)>([\s\S]*?)<\/\2>/i;
-  const m = text.match(re);
-  return m ? text.slice(m[0].length).trimStart() : text;
-}
-
 function parseJSON(raw: string): unknown {
   // Sanitise control characters that LLMs sometimes emit inside JSON string
   // values (literal newlines, tabs, etc.) by replacing them with their
@@ -361,11 +357,7 @@ function parseStoredJson<T>(raw: unknown): T | null {
 }
 
 function normalizeJournalMatch(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return value.toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function locationMatches(candidate: string, aliases: string[]): boolean {
@@ -376,7 +368,10 @@ function locationMatches(candidate: string, aliases: string[]): boolean {
     const aliasKey = normalizeJournalMatch(alias);
     if (!aliasKey) return false;
     const shortest = Math.min(candidateKey.length, aliasKey.length);
-    return candidateKey === aliasKey || (shortest >= 4 && (candidateKey.includes(aliasKey) || aliasKey.includes(candidateKey)));
+    return (
+      candidateKey === aliasKey ||
+      (shortest >= 4 && (candidateKey.includes(aliasKey) || aliasKey.includes(candidateKey)))
+    );
   });
 }
 
@@ -437,16 +432,15 @@ function extractActiveQuests(playerStatsRaw: unknown): QuestProgress[] {
   if (!playerStats || !Array.isArray(playerStats.activeQuests)) return [];
 
   return playerStats.activeQuests.filter(
-    (quest): quest is QuestProgress => !!quest && typeof quest === "object" && typeof (quest as QuestProgress).name === "string",
+    (quest): quest is QuestProgress =>
+      !!quest && typeof quest === "object" && typeof (quest as QuestProgress).name === "string",
   );
 }
 
 function extractPresentCharacterNames(presentCharactersRaw: unknown): string[] {
   const presentCharacters = parseStoredJson<Array<{ name?: string }>>(presentCharactersRaw);
   if (!Array.isArray(presentCharacters)) return [];
-  return presentCharacters
-    .map((entry) => entry?.name?.trim())
-    .filter((name): name is string => !!name);
+  return presentCharacters.map((entry) => entry?.name?.trim()).filter((name): name is string => !!name);
 }
 
 function markNpcsMetByNames(meta: Record<string, unknown>, names: string[]): Record<string, unknown> {
@@ -500,7 +494,9 @@ function reconcileJournal(
   for (const npc of (meta.gameNpcs as GameNpc[]) ?? []) {
     if (!npc.met) continue;
     const interaction = buildNpcMetInteraction(npc);
-    const hasInteraction = next.npcLog.some((entry) => entry.npcName === npc.name && entry.interactions.includes(interaction));
+    const hasInteraction = next.npcLog.some(
+      (entry) => entry.npcName === npc.name && entry.interactions.includes(interaction),
+    );
     if (!hasInteraction) {
       next = addNpcEntry(next, npc, interaction);
     }
@@ -544,6 +540,10 @@ export async function gameRoutes(app: FastifyInstance) {
 
     const activeQuests = extractActiveQuests(latestState?.playerStats);
     const currentLocation = typeof latestState?.location === "string" ? latestState.location : null;
+    const syncedMap = syncGameMapPartyPosition((hydratedMeta.gameMap as GameMap) ?? null, currentLocation);
+    if (syncedMap && syncedMap !== hydratedMeta.gameMap) {
+      hydratedMeta = { ...hydratedMeta, gameMap: syncedMap };
+    }
     const currentJournal = (hydratedMeta.gameJournal as Journal) ?? createJournal();
     return {
       ...hydratedMeta,
@@ -625,7 +625,7 @@ export async function gameRoutes(app: FastifyInstance) {
   // ── POST /game/setup ──
   app.post("/setup", async (req, reply) => {
     console.log("[game/setup] Received request");
-    const { chatId, connectionId, preferences } = setupSchema.parse(req.body);
+    const { chatId, connectionId, preferences, streaming } = setupSchema.parse(req.body);
     const chats = createChatsStorage(app.db);
     const connections = createConnectionsStorage(app.db);
     const characters = createCharactersStorage(app.db);
@@ -638,7 +638,7 @@ export async function gameRoutes(app: FastifyInstance) {
     if (!setupConfig) throw new Error("No setup config found");
 
     const { conn, baseUrl } = await resolveConnection(connections, connectionId, chat.connectionId);
-    const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey!);
+    const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey!, conn.maxContext, conn.openrouterProvider);
 
     let gmCharacterCard: string | null = null;
     if (setupConfig.gmMode === "character" && setupConfig.gmCharacterId) {
@@ -777,18 +777,20 @@ export async function gameRoutes(app: FastifyInstance) {
 
     const setupOptions = gameGenOptions(conn.model, {
       maxTokens: 16384,
-      // Force streamed upstream tokens even though /game/setup returns plain JSON.
-      // Local backends often hold non-streaming responses until the full world is
-      // finished, which makes long first-turn setup look idle and trip timeouts.
-      onToken: (() => {
-        const setupStartTime = Date.now();
-        let sawFirstToken = false;
-        return (chunk: string) => {
-          if (!chunk || sawFirstToken) return;
-          sawFirstToken = true;
-          console.log("[game/setup] First streamed token received after %d ms", Date.now() - setupStartTime);
-        };
-      })(),
+      stream: streaming,
+      ...(streaming
+        ? {
+            onToken: (() => {
+              const setupStartTime = Date.now();
+              let sawFirstToken = false;
+              return (chunk: string) => {
+                if (!chunk || sawFirstToken) return;
+                sawFirstToken = true;
+                console.log("[game/setup] First streamed token received after %d ms", Date.now() - setupStartTime);
+              };
+            })(),
+          }
+        : {}),
     });
     console.log(
       "[game/setup] Sending to provider=%s model=%s baseUrl=%s options=%s",
@@ -799,8 +801,7 @@ export async function gameRoutes(app: FastifyInstance) {
     );
 
     const result = await provider.chatComplete(messages, setupOptions);
-
-    const responseText = result.content ?? "";
+    const responseText = extractLeadingThinkingBlocks(result.content ?? "").content;
 
     console.log("[game/setup] Response length: %d chars", responseText.length);
     console.log("[game/setup] Full response:\n%s", responseText);
@@ -1119,32 +1120,30 @@ export async function gameRoutes(app: FastifyInstance) {
     const newMeta = parseMeta(newChat.metadata);
     await chats.updateMetadata(newChat.id, {
       ...newMeta,
+      ...prevMeta,
       gameId,
       gameSessionNumber: sessionNumber,
-      gameSessionStatus: "active",
+      gameSessionStatus: "ready",
       gameActiveState: "exploration",
-      gameGmMode: prevMeta.gameGmMode,
-      gameGmCharacterId: prevMeta.gameGmCharacterId,
-      gamePartyCharacterIds: prevMeta.gamePartyCharacterIds,
       gamePartyChatId: null,
-      gameMap: prevMeta.gameMap,
       gamePreviousSessionSummaries: summaries,
-      gameStoryArc: prevMeta.gameStoryArc,
-      gamePlotTwists: prevMeta.gamePlotTwists,
       gameDialogueChatId: null,
       gameCombatChatId: null,
-      gameSetupConfig: prevMeta.gameSetupConfig,
-      gameCharacterCards: prevMeta.gameCharacterCards,
-      gameNpcs: prevMeta.gameNpcs,
-      gameBlueprint: prevMeta.gameBlueprint,
       enableAgents: true,
     });
 
     let recapText = "";
+    let recapThinking = "";
     if (summaries.length > 0) {
       try {
         const { conn, baseUrl } = await resolveConnection(connections, connectionId, newChat.connectionId);
-        const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey!);
+        const provider = createLLMProvider(
+          conn.provider,
+          baseUrl,
+          conn.apiKey!,
+          conn.maxContext,
+          conn.openrouterProvider,
+        );
 
         const recapMessages: ChatMessage[] = [
           { role: "system", content: buildRecapPrompt(summaries) },
@@ -1157,13 +1156,28 @@ export async function gameRoutes(app: FastifyInstance) {
             temperature: 0.7,
           }),
         );
-        recapText = result.content ?? "";
+        const recapExtraction = extractLeadingThinkingBlocks(result.content ?? "");
+        recapText = recapExtraction.content;
+        recapThinking = recapExtraction.thinking;
       } catch {
         recapText = `Session ${sessionNumber} begins. The adventure continues...`;
+        recapThinking = "";
       }
 
       if (recapText) {
-        await chats.createMessage({ chatId: newChat.id, role: "narrator", characterId: null, content: recapText });
+        try {
+          const recapMsg = await chats.createMessage({
+            chatId: newChat.id,
+            role: "narrator",
+            characterId: null,
+            content: recapText,
+          });
+          if (recapMsg?.id && recapThinking) {
+            await chats.updateMessageExtra(recapMsg.id, { thinking: recapThinking });
+          }
+        } catch (err) {
+          console.warn("[game/session/start] Failed to persist recap message:", err);
+        }
       }
     }
 
@@ -1216,7 +1230,7 @@ export async function gameRoutes(app: FastifyInstance) {
     const latestState = await gameStates.getLatest(chatId);
 
     const { conn, baseUrl } = await resolveConnection(connections, connectionId, chat.connectionId);
-    const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey!);
+    const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey!, conn.maxContext, conn.openrouterProvider);
 
     const summaryMessages: ChatMessage[] = [
       { role: "system", content: buildSessionSummaryPrompt() },
@@ -1236,10 +1250,11 @@ export async function gameRoutes(app: FastifyInstance) {
         temperature: 0.5,
       }),
     );
+    const summaryExtraction = extractLeadingThinkingBlocks(result.content ?? "");
 
     let summary: SessionSummary;
     try {
-      const parsed = parseJSON(result.content ?? "") as Record<string, unknown>;
+      const parsed = parseJSON(summaryExtraction.content) as Record<string, unknown>;
       summary = {
         sessionNumber,
         summary: (parsed.summary as string) || "Session concluded.",
@@ -1255,7 +1270,7 @@ export async function gameRoutes(app: FastifyInstance) {
     } catch {
       summary = {
         sessionNumber,
-        summary: result.content ?? "Session concluded.",
+        summary: summaryExtraction.content || "Session concluded.",
         partyDynamics: "",
         partyState: "",
         keyDiscoveries: [],
@@ -1289,8 +1304,9 @@ export async function gameRoutes(app: FastifyInstance) {
         ];
 
         const cardResult = await provider.chatComplete(cardMessages, gameGenOptions(conn.model, { temperature: 0.4 }));
+        const cardContent = extractLeadingThinkingBlocks(cardResult.content ?? "").content;
 
-        const parsedCards = parseJSON(cardResult.content ?? "") as Array<Record<string, unknown>>;
+        const parsedCards = parseJSON(cardContent) as Array<Record<string, unknown>>;
         if (Array.isArray(parsedCards) && parsedCards.length > 0) {
           // Validate each card has at least a name
           const valid = parsedCards.filter((c) => typeof c.name === "string" && c.name);
@@ -1312,12 +1328,15 @@ export async function gameRoutes(app: FastifyInstance) {
       gameCharacterCards: updatedCards,
     });
 
-    await chats.createMessage({
+    const sessionSummaryMsg = await chats.createMessage({
       chatId,
       role: "narrator",
       characterId: null,
       content: `**Session ${sessionNumber} Concluded**\n\n${summary.summary}\n\n*Party Dynamics:* ${summary.partyDynamics}`,
     });
+    if (sessionSummaryMsg?.id && summaryExtraction.thinking) {
+      await chats.updateMessageExtra(sessionSummaryMsg.id, { thinking: summaryExtraction.thinking });
+    }
 
     // Push an OOC influence to the connected conversation if linked
     if (chat.connectedChatId) {
@@ -1484,7 +1503,7 @@ export async function gameRoutes(app: FastifyInstance) {
     if (!chat) throw new Error("Chat not found");
 
     const { conn, baseUrl } = await resolveConnection(connections, connectionId, chat.connectionId);
-    const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey!);
+    const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey!, conn.maxContext, conn.openrouterProvider);
 
     const messages: ChatMessage[] = [
       { role: "system", content: buildMapGenerationPrompt(locationType, context) },
@@ -1497,10 +1516,11 @@ export async function gameRoutes(app: FastifyInstance) {
         temperature: 0.6,
       }),
     );
+    const mapContent = extractLeadingThinkingBlocks(result.content ?? "").content;
 
     let map: GameMap;
     try {
-      map = parseJSON(result.content ?? "") as GameMap;
+      map = parseJSON(mapContent) as GameMap;
     } catch {
       throw new Error("Failed to parse map from AI response");
     }
@@ -2042,15 +2062,15 @@ export async function gameRoutes(app: FastifyInstance) {
       { role: "user", content: userPrompt },
     ];
 
-    const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey!);
+    const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey!, conn.maxContext, conn.openrouterProvider);
     const result = await provider.chatComplete(
       messages,
       gameGenOptions(conn.model ?? "", {
         maxTokens: 8192,
       }),
     );
-
-    const raw = stripThinkTags(result.content || "");
+    const partyTurnExtraction = extractLeadingThinkingBlocks(result.content || "");
+    const raw = partyTurnExtraction.content;
 
     // Extract and apply reputation tags from party response
     const repRegex = /\[reputation:\s*npc="([^"]+)"\s*action="([^"]+)"\]/gi;
@@ -2077,12 +2097,15 @@ export async function gameRoutes(app: FastifyInstance) {
     const cleanRaw = raw.replace(/\[reputation:\s*npc="[^"]+"\s*action="[^"]+"\]/gi, "").trim();
 
     // Save party response as a message in the game chat
-    await chats.createMessage({
+    const partyMsg = await chats.createMessage({
       chatId: input.chatId,
       role: "assistant",
       characterId: null,
       content: `[party-turn]\n${cleanRaw}`,
     });
+    if (partyMsg?.id && partyTurnExtraction.thinking) {
+      await chats.updateMessageExtra(partyMsg.id, { thinking: partyTurnExtraction.thinking });
+    }
 
     return { raw: cleanRaw };
   });
@@ -2140,7 +2163,7 @@ export async function gameRoutes(app: FastifyInstance) {
       { role: "user", content: userPrompt },
     ];
 
-    const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey!);
+    const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey!, conn.maxContext, conn.openrouterProvider);
     console.log(
       "[game/scene-wrap] chatId=%s, model=%s, narration=%d chars",
       input.chatId,
@@ -2157,7 +2180,7 @@ export async function gameRoutes(app: FastifyInstance) {
       }),
     );
 
-    const raw = result.content || "";
+    const raw = extractLeadingThinkingBlocks(result.content || "").content;
     console.log("[game/scene-wrap] Response (%d chars): %s", raw.length, raw);
 
     try {
@@ -2231,7 +2254,8 @@ export async function gameRoutes(app: FastifyInstance) {
             const imgModel = imgConn.model || "";
             const imgBaseUrl = imgConn.baseUrl || "https://image.pollinations.ai";
             const imgApiKey = imgConn.apiKey || "";
-            const imgServiceHint = imgConn.imageService || "";
+            const imgSource = (imgConn as any).imageGenerationSource || imgModel;
+            const imgServiceHint = imgConn.imageService || imgSource;
 
             const setupCfg = meta.gameSetupConfig as Record<string, unknown> | null;
             const genre = (setupCfg?.genre as string) || "";
@@ -2272,6 +2296,7 @@ export async function gameRoutes(app: FastifyInstance) {
                   genre,
                   setting,
                   artStyle,
+                  imgSource,
                   imgModel,
                   imgBaseUrl,
                   imgApiKey,
@@ -2320,6 +2345,7 @@ export async function gameRoutes(app: FastifyInstance) {
                   genre,
                   setting,
                   artStyle,
+                  imgSource,
                   imgModel,
                   imgBaseUrl,
                   imgApiKey,
@@ -2460,7 +2486,8 @@ export async function gameRoutes(app: FastifyInstance) {
     const imgModel = imgConn.model || "";
     const imgBaseUrl = imgConn.baseUrl || "https://image.pollinations.ai";
     const imgApiKey = imgConn.apiKey || "";
-    const imgServiceHint = imgConn.imageService || "";
+    const imgSource = (imgConn as any).imageGenerationSource || imgModel;
+    const imgServiceHint = imgConn.imageService || imgSource;
 
     const setupCfg = meta.gameSetupConfig as Record<string, unknown> | null;
     const genre = (setupCfg?.genre as string) || "";
@@ -2487,6 +2514,7 @@ export async function gameRoutes(app: FastifyInstance) {
         genre,
         setting,
         artStyle,
+        imgSource,
         imgModel,
         imgBaseUrl,
         imgApiKey,
@@ -2523,6 +2551,7 @@ export async function gameRoutes(app: FastifyInstance) {
           npcName: npc.name,
           appearance: npc.description,
           artStyle,
+          imgSource,
           imgModel,
           imgBaseUrl,
           imgApiKey,

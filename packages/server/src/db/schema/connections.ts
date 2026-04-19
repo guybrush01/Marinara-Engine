@@ -29,6 +29,8 @@ export const apiConnections = sqliteTable("api_connections", {
   embeddingConnectionId: text("embedding_connection_id"),
   /** OpenRouter: preferred provider for model routing (e.g. "Anthropic", "Google") */
   openrouterProvider: text("openrouter_provider"),
+  /** Explicit image backend selection for image-generation connections */
+  imageGenerationSource: text("image_generation_source"),
   /** ComfyUI: custom workflow JSON with placeholders (%prompt%, %width%, etc.) */
   comfyuiWorkflow: text("comfyui_workflow"),
   /** Image generation: explicitly selected service ID (e.g. "comfyui", "automatic1111"). Overrides URL inference. */

@@ -62,17 +62,17 @@ class SidecarProcessService {
     return this.baseUrl;
   }
 
-  async ensureReady(): Promise<string> {
-    await this.syncForCurrentConfig();
+  async ensureReady(forceStart = false): Promise<string> {
+    await this.syncForCurrentConfig(forceStart);
     if (!this.ready || !this.baseUrl) {
       throw new Error("The local llama-server is not ready");
     }
     return this.baseUrl;
   }
 
-  async syncForCurrentConfig(): Promise<void> {
+  async syncForCurrentConfig(forceStart = false): Promise<void> {
     return this.withLock(async () => {
-      await this.syncUnlocked();
+      await this.syncUnlocked(forceStart);
     });
   }
 
@@ -110,19 +110,13 @@ class SidecarProcessService {
     }
   }
 
-  private async syncUnlocked(): Promise<void> {
+  private async syncUnlocked(forceStart = false): Promise<void> {
     const modelPath = sidecarModelService.getModelFilePath();
     const config = sidecarModelService.getConfig();
 
     if (!modelPath) {
       await this.stopUnlocked();
       sidecarModelService.setStatus("not_downloaded");
-      return;
-    }
-
-    if (!sidecarModelService.isEnabled()) {
-      await this.stopUnlocked();
-      sidecarModelService.setStatus("downloaded");
       return;
     }
 
@@ -136,6 +130,12 @@ class SidecarProcessService {
 
     if (this.child && this.ready && this.currentSignature === nextSignature) {
       sidecarModelService.setStatus("ready");
+      return;
+    }
+
+    if (!forceStart && !sidecarModelService.isEnabled()) {
+      await this.stopUnlocked();
+      sidecarModelService.setStatus("downloaded");
       return;
     }
 

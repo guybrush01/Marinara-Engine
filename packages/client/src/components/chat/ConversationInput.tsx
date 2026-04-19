@@ -316,7 +316,6 @@ export function ConversationInput({ characterNames = [] }: ConversationInputProp
       const result = await matched.command.execute(matched.args, slashCtx);
       if (result.feedback) {
         setFeedback(result.feedback);
-        setTimeout(() => setFeedback(null), 5000);
       }
       return;
     }
@@ -482,6 +481,10 @@ export function ConversationInput({ characterNames = [] }: ConversationInputProp
     }
   }, [characterNames]);
 
+  useEffect(() => {
+    if (hasInput && feedback) setFeedback(null);
+  }, [hasInput, feedback]);
+
   const handleEmojiSelect = useCallback((emoji: string) => {
     if (!textareaRef.current) return;
     const el = textareaRef.current;
@@ -581,9 +584,16 @@ export function ConversationInput({ characterNames = [] }: ConversationInputProp
       {/* Feedback toast */}
       {feedback && (
         <div className="absolute bottom-full left-3 right-3 mb-2 flex justify-center">
-          <span className="rounded-full bg-foreground/15 px-3 py-1 text-xs font-medium text-foreground shadow-md">
-            {feedback}
-          </span>
+          <div className="flex w-full items-start gap-2 rounded-lg bg-foreground/15 px-3 py-2 text-xs font-medium text-foreground shadow-md">
+            <span className="flex-1 whitespace-pre-wrap">{feedback}</span>
+            <button
+              onClick={() => setFeedback(null)}
+              className="rounded p-0.5 opacity-60 transition-opacity hover:opacity-100"
+              aria-label="Dismiss"
+            >
+              <X size="0.75rem" />
+            </button>
+          </div>
         </div>
       )}
 

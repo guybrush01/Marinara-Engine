@@ -134,8 +134,15 @@ function computeTooltipStyle(rect: Rect, side: "top" | "bottom" | "left" | "righ
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const isMobile = vw < 640;
-  const TOOLTIP_W = isMobile ? Math.min(vw - 32, 320) : 320;
+  const VIEWPORT_MARGIN = isMobile ? 12 : 16;
+  const TOOLTIP_W = isMobile ? Math.min(vw - VIEWPORT_MARGIN * 2, 320) : Math.min(320, vw - VIEWPORT_MARGIN * 2);
   const GAP = isMobile ? 8 : 16;
+  const available = {
+    right: vw - (rect.left + rect.width + GAP + PAD) - VIEWPORT_MARGIN,
+    left: rect.left - GAP - PAD - VIEWPORT_MARGIN,
+    bottom: vh - (rect.top + rect.height + GAP + PAD) - VIEWPORT_MARGIN,
+    top: rect.top - GAP - PAD - VIEWPORT_MARGIN,
+  };
 
   // On small screens, always center horizontally and position below target
   if (isMobile) {
@@ -145,44 +152,77 @@ function computeTooltipStyle(rect: Rect, side: "top" | "bottom" | "left" | "righ
       top,
       left: (vw - TOOLTIP_W) / 2,
       width: TOOLTIP_W,
-      maxHeight: `${vh - top - 16}px`,
+      maxHeight: `${Math.max(200, vh - top - VIEWPORT_MARGIN)}px`,
       overflowY: "auto" as const,
+      overflowX: "hidden" as const,
+      overscrollBehavior: "contain" as const,
     };
   }
+
+  const minScrollableHeight = 220;
+  const preferredVerticalSide = available.bottom >= available.top ? "bottom" : "top";
+  let placement = side;
+
+  if (side === "right" && available.right < TOOLTIP_W && available.left >= TOOLTIP_W) {
+    placement = "left";
+  } else if (side === "left" && available.left < TOOLTIP_W && available.right >= TOOLTIP_W) {
+    placement = "right";
+  } else if (side === "bottom" && available.bottom < minScrollableHeight && available.top >= minScrollableHeight) {
+    placement = "top";
+  } else if (side === "top" && available.top < minScrollableHeight && available.bottom >= minScrollableHeight) {
+    placement = "bottom";
+  } else if ((side === "right" || side === "left") && available.right < TOOLTIP_W && available.left < TOOLTIP_W) {
+    placement = preferredVerticalSide;
+  } else if (
+    (side === "top" || side === "bottom") &&
+    available.top < minScrollableHeight &&
+    available.bottom < minScrollableHeight
+  ) {
+    placement = available.right >= available.left ? "right" : "left";
+  }
+
+  let maxHeight = vh - VIEWPORT_MARGIN * 2;
 
   let top = 0;
   let left = 0;
 
-  if (side === "right") {
-    top = rect.top + rect.height / 2;
+  if (placement === "right") {
+    maxHeight = Math.max(minScrollableHeight, vh - VIEWPORT_MARGIN * 2);
+    top = rect.top + rect.height / 2 - maxHeight / 2;
     left = rect.left + rect.width + GAP + PAD;
-    if (left + TOOLTIP_W > vw - 16) {
+    if (left + TOOLTIP_W > vw - VIEWPORT_MARGIN) {
       left = rect.left - TOOLTIP_W - GAP - PAD;
     }
-  } else if (side === "left") {
-    top = rect.top + rect.height / 2;
+  } else if (placement === "left") {
+    maxHeight = Math.max(minScrollableHeight, vh - VIEWPORT_MARGIN * 2);
+    top = rect.top + rect.height / 2 - maxHeight / 2;
     left = rect.left - TOOLTIP_W - GAP - PAD;
-    if (left < 16) {
+    if (left < VIEWPORT_MARGIN) {
       left = rect.left + rect.width + GAP + PAD;
     }
-  } else if (side === "bottom") {
+  } else if (placement === "bottom") {
+    maxHeight = Math.max(minScrollableHeight, Math.min(vh - VIEWPORT_MARGIN * 2, available.bottom));
     top = rect.top + rect.height + GAP + PAD;
     left = rect.left + rect.width / 2 - TOOLTIP_W / 2;
   } else {
-    top = rect.top - GAP - PAD;
+    maxHeight = Math.max(minScrollableHeight, Math.min(vh - VIEWPORT_MARGIN * 2, available.top));
+    top = rect.top - GAP - PAD - maxHeight;
     left = rect.left + rect.width / 2 - TOOLTIP_W / 2;
   }
 
   // Clamp within viewport
-  left = Math.max(16, Math.min(left, vw - TOOLTIP_W - 16));
-  top = Math.max(16, Math.min(top, vh - 240));
+  left = Math.max(VIEWPORT_MARGIN, Math.min(left, vw - TOOLTIP_W - VIEWPORT_MARGIN));
+  top = Math.max(VIEWPORT_MARGIN, Math.min(top, vh - maxHeight - VIEWPORT_MARGIN));
 
   return {
     position: "fixed",
     top,
     left,
     width: TOOLTIP_W,
-    transform: side === "right" || side === "left" ? "translateY(-50%)" : undefined,
+    maxHeight: `${maxHeight}px`,
+    overflowY: "auto",
+    overflowX: "hidden",
+    overscrollBehavior: "contain",
   };
 }
 
@@ -224,7 +264,7 @@ function TourCardContent({
       </div>
 
       {/* Body */}
-      <p className="mb-4 text-xs leading-relaxed text-[var(--muted-foreground)]">
+      <p className="mb-4 break-words text-xs leading-relaxed text-[var(--muted-foreground)]">
         {currentStep.body.split("\n").map((line, i, arr) => (
           <span key={i}>
             {line.split(/(\*\*[^*]+\*\*)/).map((part, j) =>
@@ -480,7 +520,7 @@ function OnboardingTutorialInner() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.96 }}
               transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-              className="pointer-events-auto rounded-2xl border border-[var(--border)] bg-[var(--popover)] p-5 shadow-2xl ring-1 ring-[var(--primary)]/20 max-h-[90vh] overflow-y-auto"
+              className="pointer-events-auto rounded-2xl border border-[var(--border)] bg-[var(--popover)] p-5 shadow-2xl ring-1 ring-[var(--primary)]/20 max-h-[90vh] overflow-x-hidden overflow-y-auto"
               style={{ width: Math.min(380, window.innerWidth - 32) }}
             >
               <TourCardContent

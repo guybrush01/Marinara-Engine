@@ -9,6 +9,7 @@ import { createLLMProvider } from "../services/llm/provider-registry.js";
 const personaMakerSchema = z.object({
   prompt: z.string().min(1),
   connectionId: z.string().min(1),
+  streaming: z.boolean().optional().default(true),
 });
 
 const SYSTEM_PROMPT = `You are a creative persona designer for roleplay and fiction. Given a short description or concept, generate a complete user persona in JSON format. A persona represents the user's in-world identity — the character they play as.
@@ -58,7 +59,7 @@ export async function personaMakerRoutes(app: FastifyInstance) {
     });
 
     try {
-      const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey);
+      const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey, conn.maxContext, conn.openrouterProvider);
       let fullResponse = "";
 
       for await (const chunk of provider.chat(
@@ -70,7 +71,7 @@ export async function personaMakerRoutes(app: FastifyInstance) {
           model: conn.model,
           temperature: 1,
           maxTokens: 4096,
-          stream: true,
+          stream: input.streaming,
         },
       )) {
         fullResponse += chunk;

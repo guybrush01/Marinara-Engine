@@ -8,6 +8,7 @@ import { api } from "../lib/api-client";
 import { chatKeys } from "./use-chats";
 import { useGameModeStore } from "../stores/game-mode.store";
 import { useGameStateStore } from "../stores/game-state.store";
+import { useChatStore } from "../stores/chat.store";
 import { useUIStore } from "../stores/ui.store";
 import type {
   GameActiveState,
@@ -105,7 +106,7 @@ export function useGameSetup() {
 
   return useMutation({
     mutationFn: (data: { chatId: string; connectionId?: string; preferences: string }) =>
-      api.post<SetupResponse>("/game/setup", data),
+      api.post<SetupResponse>("/game/setup", { ...data, streaming: useUIStore.getState().enableStreaming }),
     onSuccess: () => {
       store.getState().setSetupActive(false);
       const sessionChatId = store.getState().activeSessionChatId;
@@ -146,10 +147,14 @@ export function useStartSession() {
   return useMutation({
     mutationFn: (data: { gameId: string; connectionId?: string }) =>
       api.post<StartSessionResponse>("/game/session/start", data),
-    onSuccess: (res) => {
-      store.getState().setActiveGame(store.getState().activeGameId, res.sessionChat.id, null);
+    onSuccess: (res, variables) => {
+      store.getState().setActiveGame(variables.gameId, res.sessionChat.id, null);
       store.getState().setSessionNumber(res.sessionNumber);
+      qc.setQueryData(chatKeys.detail(res.sessionChat.id), res.sessionChat);
+      useChatStore.getState().setActiveChatId(res.sessionChat.id);
       qc.invalidateQueries({ queryKey: chatKeys.list() });
+      qc.invalidateQueries({ queryKey: gameKeys.sessions(variables.gameId) });
+      qc.invalidateQueries({ queryKey: chatKeys.messages(res.sessionChat.id) });
     },
   });
 }

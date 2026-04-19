@@ -46,6 +46,7 @@ import {
   BUILT_IN_AGENTS,
   BUILT_IN_TOOLS,
   DEFAULT_AGENT_TOOLS,
+  LOCAL_SIDECAR_CONNECTION_ID,
   getDefaultAgentPrompt,
   type AgentPhase,
   type ToolDefinition,
@@ -543,6 +544,7 @@ export function AgentEditor() {
               <option value="">
                 {defaultAgentConn ? `Agent default (${defaultAgentConn.name})` : "Use chat connection"}
               </option>
+              <option value={LOCAL_SIDECAR_CONNECTION_ID}>Local Model (sidecar)</option>
               {llmConnections.map((conn) => (
                 <option key={conn.id} value={conn.id}>
                   {conn.name} ({conn.provider})
@@ -550,8 +552,9 @@ export function AgentEditor() {
               ))}
             </select>
             <p className="mt-1 text-[0.625rem] text-[var(--muted-foreground)]">
-              When empty, uses the agent default connection if one is set, otherwise falls back to the chat&apos;s
-              active connection.
+              {localConnectionId === LOCAL_SIDECAR_CONNECTION_ID
+                ? "Uses the built-in Local Model from the Connections panel. The sidecar will start on demand when this agent runs."
+                : "When empty, uses the agent default connection if one is set, otherwise falls back to the chat's active connection."}
             </p>
           </FieldGroup>
 

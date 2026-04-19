@@ -1,6 +1,6 @@
 {
   "name": "marinara-engine",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "private": true,
   "description": "AI Chat & Roleplay Frontend — Conversation, Roleplay, Visual Novel",
   "author": "Marianna",
@@ -41,7 +41,9 @@
     "onlyBuiltDependencies": [
       "better-sqlite3",
       "esbuild",
-      "sharp"
+      "sharp",
+      "onnxruntime-node",
+      "protobufjs"
     ],
     "overrides": {
       "onnxruntime-common": "1.24.3",

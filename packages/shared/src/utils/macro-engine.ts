@@ -19,6 +19,62 @@ export interface MacroContext {
   agentData?: Record<string, string>;
 }
 
+export interface SupportedMacroDefinition {
+  category: string;
+  syntax: string;
+  description: string;
+}
+
+export const SUPPORTED_MACROS: readonly SupportedMacroDefinition[] = [
+  { category: "Identity", syntax: "{{user}} / {{persona}}", description: "Current user or persona name" },
+  { category: "Identity", syntax: "{{char}}", description: "Current character name" },
+  { category: "Identity", syntax: "{{characters}}", description: "All character names, comma-separated" },
+  { category: "Context", syntax: "{{input}}", description: "Most recent user message" },
+  { category: "Context", syntax: "{{model}}", description: "Current model name" },
+  { category: "Context", syntax: "{{chatId}}", description: "Current chat ID" },
+  { category: "Context", syntax: "{{agent::TYPE}}", description: "Cached output for an agent or tracker type" },
+  { category: "Time", syntax: "{{date}}", description: "Current real date in YYYY-MM-DD format" },
+  { category: "Time", syntax: "{{time}}", description: "Current real time in HH:MM format" },
+  { category: "Time", syntax: "{{datetime}} / {{isotime}}", description: "Current ISO timestamp" },
+  { category: "Time", syntax: "{{weekday}}", description: "Current weekday name" },
+  { category: "Random", syntax: "{{random}}", description: "Random number from 0 to 100" },
+  { category: "Random", syntax: "{{random:X:Y}}", description: "Random number between X and Y" },
+  { category: "Random", syntax: "{{roll:XdY}}", description: "Dice roll total such as 2d6" },
+  { category: "Variables", syntax: "{{getvar::name}}", description: "Read a dynamic variable" },
+  { category: "Variables", syntax: "{{setvar::name::value}}", description: "Set a dynamic variable" },
+  { category: "Variables", syntax: "{{addvar::name::value}}", description: "Append to a dynamic variable" },
+  {
+    category: "Variables",
+    syntax: "{{incvar::name}} / {{decvar::name}}",
+    description: "Increment or decrement a numeric variable",
+  },
+  { category: "Variables", syntax: "{{NAME}}", description: "Resolve a preset variable named NAME" },
+  { category: "Formatting", syntax: "{{newline}} / {{\\n}}", description: "Insert a literal newline" },
+  { category: "Formatting", syntax: "{{trim}}", description: "Trim the final output" },
+  {
+    category: "Formatting",
+    syntax: "{{trimStart}} / {{trimEnd}}",
+    description: "Trim whitespace at one edge of the output",
+  },
+  {
+    category: "Formatting",
+    syntax: "{{uppercase}}...{{/uppercase}}",
+    description: "Uppercase a wrapped block",
+  },
+  {
+    category: "Formatting",
+    syntax: "{{lowercase}}...{{/lowercase}}",
+    description: "Lowercase a wrapped block",
+  },
+  { category: "Formatting", syntax: "{{noop}}", description: "No-op placeholder removed from output" },
+  { category: "Formatting", syntax: "{{// comment}}", description: "Inline author comment removed from output" },
+  {
+    category: "Formatting",
+    syntax: '{{banned "text"}}',
+    description: "Accepted but currently stripped from output",
+  },
+];
+
 /**
  * Replace macros in a prompt string with their values.
  *

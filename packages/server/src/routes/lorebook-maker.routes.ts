@@ -10,6 +10,7 @@ import { createLorebooksStorage } from "../services/storage/lorebooks.storage.js
 const lorebookMakerSchema = z.object({
   prompt: z.string().min(1),
   connectionId: z.string().min(1),
+  streaming: z.boolean().optional().default(true),
   /** Optionally attach generated entries to an existing lorebook */
   lorebookId: z.string().optional(),
   /** Number of entries to generate */
@@ -135,7 +136,7 @@ export async function lorebookMakerRoutes(app: FastifyInstance) {
     };
 
     try {
-      const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey);
+      const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey, conn.maxContext, conn.openrouterProvider);
 
       // ── Decide whether to batch ──
       const totalEntries = input.entryCount;
@@ -200,7 +201,7 @@ export async function lorebookMakerRoutes(app: FastifyInstance) {
               model: conn.model,
               temperature: 1,
               maxTokens: 16384,
-              stream: true,
+              stream: input.streaming,
             },
           )) {
             batchResponse += chunk;

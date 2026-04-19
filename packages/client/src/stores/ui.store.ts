@@ -19,6 +19,9 @@ export type VisualTheme = "default" | "sillytavern";
 export type HudPosition = "top" | "left" | "right";
 export type EchoChamberSide = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 export type UserStatus = "active" | "idle" | "dnd";
+export type RoleplayAvatarStyle = "circles" | "panel";
+export const APP_LANGUAGE_OPTIONS = [{ id: "en", label: "English" }] as const;
+export type AppLanguage = (typeof APP_LANGUAGE_OPTIONS)[number]["id"];
 
 const SIDEBAR_WIDTH_MIN = 240;
 const SIDEBAR_WIDTH_MAX = 480;
@@ -82,6 +85,7 @@ interface UIState {
 
   // ── Settings (persisted) ──
   fontSize: FontSize;
+  language: AppLanguage;
   /** Font size for chat messages (px) */
   chatFontSize: number;
   /** Custom font family name (empty = default Inter) */
@@ -114,6 +118,8 @@ interface UIState {
   chatFontColor: string;
   /** Opacity for roleplay message backgrounds (0–100) */
   chatFontOpacity: number;
+  /** Layout style for roleplay message avatars */
+  roleplayAvatarStyle: RoleplayAvatarStyle;
   /** Text outline/stroke width in px (0 = off) */
   textStrokeWidth: number;
   /** Text outline/stroke color */
@@ -216,6 +222,7 @@ interface UIState {
 
   // Settings actions
   setFontSize: (size: FontSize) => void;
+  setLanguage: (language: AppLanguage) => void;
   setChatFontSize: (size: number) => void;
   setFontFamily: (family: string) => void;
   setEnableStreaming: (v: boolean) => void;
@@ -235,6 +242,7 @@ interface UIState {
   setNarrationOpacity: (v: number) => void;
   setChatFontColor: (v: string) => void;
   setChatFontOpacity: (v: number) => void;
+  setRoleplayAvatarStyle: (v: RoleplayAvatarStyle) => void;
   setTextStrokeWidth: (v: number) => void;
   setTextStrokeColor: (v: string) => void;
   setCenterCompact: (v: boolean) => void;
@@ -281,6 +289,7 @@ export function pickSyncedSettings(state: UIState) {
     theme: state.theme,
     chatBackground: state.chatBackground,
     fontSize: state.fontSize,
+    language: state.language,
     chatFontSize: state.chatFontSize,
     fontFamily: state.fontFamily,
     enableStreaming: state.enableStreaming,
@@ -298,6 +307,7 @@ export function pickSyncedSettings(state: UIState) {
     narrationOpacity: state.narrationOpacity,
     chatFontColor: state.chatFontColor,
     chatFontOpacity: state.chatFontOpacity,
+    roleplayAvatarStyle: state.roleplayAvatarStyle,
     textStrokeWidth: state.textStrokeWidth,
     textStrokeColor: state.textStrokeColor,
     visualTheme: state.visualTheme,
@@ -345,6 +355,7 @@ export const useUIStore = create<UIState>()(
 
       // Settings defaults
       fontSize: 17 as FontSize,
+      language: "en" as AppLanguage,
       chatFontSize: 16,
       fontFamily: "",
       enableStreaming: true,
@@ -364,6 +375,7 @@ export const useUIStore = create<UIState>()(
       narrationOpacity: 80,
       chatFontColor: "",
       chatFontOpacity: 90,
+      roleplayAvatarStyle: "circles" as RoleplayAvatarStyle,
       textStrokeWidth: 0.5,
       textStrokeColor: "#000000",
       visualTheme: "default" as VisualTheme,
@@ -557,6 +569,7 @@ export const useUIStore = create<UIState>()(
 
       // Settings actions
       setFontSize: (size) => set({ fontSize: size }),
+      setLanguage: (language) => set({ language }),
       setChatFontSize: (size) => set({ chatFontSize: size }),
       setFontFamily: (family) => set({ fontFamily: family }),
       setEnableStreaming: (v) => set({ enableStreaming: v }),
@@ -576,6 +589,7 @@ export const useUIStore = create<UIState>()(
       setNarrationOpacity: (v) => set({ narrationOpacity: Math.max(0, Math.min(100, v)) }),
       setChatFontColor: (v) => set({ chatFontColor: v }),
       setChatFontOpacity: (v) => set({ chatFontOpacity: Math.max(0, Math.min(100, v)) }),
+      setRoleplayAvatarStyle: (v) => set({ roleplayAvatarStyle: v }),
       setTextStrokeWidth: (v) => set({ textStrokeWidth: Math.max(0, Math.min(5, v)) }),
       setTextStrokeColor: (v) => set({ textStrokeColor: v }),
       setCenterCompact: (v) => set({ centerCompact: v }),
@@ -622,7 +636,7 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: "marinara-engine-ui",
-      version: 8,
+      version: 9,
       // Debounce localStorage writes to avoid sync I/O on every state change
       storage: createJSONStorage(() => {
         let timer: ReturnType<typeof setTimeout> | null = null;
@@ -716,6 +730,12 @@ export const useUIStore = create<UIState>()(
             persisted.rightPanelWidth = 320;
           }
         }
+        // v8 → v9: add roleplay avatar layout setting
+        if (version <= 8) {
+          if (persisted.roleplayAvatarStyle === undefined) {
+            persisted.roleplayAvatarStyle = "circles";
+          }
+        }
         return persisted;
       },
       partialize: (state) => ({
@@ -725,6 +745,7 @@ export const useUIStore = create<UIState>()(
         theme: state.theme,
         chatBackground: state.chatBackground,
         fontSize: state.fontSize,
+        language: state.language,
         chatFontSize: state.chatFontSize,
         fontFamily: state.fontFamily,
         enableStreaming: state.enableStreaming,
@@ -742,6 +763,7 @@ export const useUIStore = create<UIState>()(
         narrationOpacity: state.narrationOpacity,
         chatFontColor: state.chatFontColor,
         chatFontOpacity: state.chatFontOpacity,
+        roleplayAvatarStyle: state.roleplayAvatarStyle,
         textStrokeWidth: state.textStrokeWidth,
         textStrokeColor: state.textStrokeColor,
         visualTheme: state.visualTheme,

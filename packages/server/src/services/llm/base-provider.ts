@@ -54,6 +54,8 @@ export interface ChatOptions {
   model: string;
   temperature?: number;
   maxTokens?: number;
+  /** Total context window limit for prompt + completion tokens. */
+  maxContext?: number;
   topP?: number;
   topK?: number;
   frequencyPenalty?: number;
@@ -103,6 +105,273 @@ export interface ChatCompletionResult {
   usage?: LLMUsage;
 }
 
+export interface ContextFitResult {
+  messages: ChatMessage[];
+  maxContext?: number;
+  maxTokens?: number;
+  inputBudget?: number;
+  estimatedTokensBefore: number;
+  estimatedTokensAfter: number;
+  trimmed: boolean;
+}
+
+const CHARS_PER_TOKEN = 4;
+const MESSAGE_OVERHEAD_TOKENS = 6;
+const IMAGE_TOKEN_ESTIMATE = 256;
+const CONTEXT_SAFETY_MARGIN_TOKENS = 64;
+const MIN_INPUT_BUDGET_TOKENS = 128;
+const MIN_CONTENT_CHARS = 48;
+const TRUNCATION_MARKER = "\n\n[Truncated to fit context window]";
+
+function normalizePositiveInteger(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return undefined;
+  return Math.floor(value);
+}
+
+function minDefined(...values: Array<number | undefined>): number | undefined {
+  let result: number | undefined;
+  for (const value of values) {
+    if (value === undefined) continue;
+    result = result === undefined ? value : Math.min(result, value);
+  }
+  return result;
+}
+
+function estimateTextTokens(text: string): number {
+  return Math.ceil(Array.from(text).length / CHARS_PER_TOKEN);
+}
+
+function estimateStructuredTokens(value: unknown): number {
+  try {
+    return estimateTextTokens(JSON.stringify(value));
+  } catch {
+    return 0;
+  }
+}
+
+function estimateMessageTokens(message: ChatMessage): number {
+  let total = MESSAGE_OVERHEAD_TOKENS + estimateTextTokens(message.content ?? "");
+  if (message.tool_call_id) {
+    total += estimateTextTokens(message.tool_call_id) + 2;
+  }
+  if (message.tool_calls?.length) {
+    total += estimateStructuredTokens(message.tool_calls) + 8;
+  }
+  if (message.images?.length) {
+    total += message.images.length * IMAGE_TOKEN_ESTIMATE;
+  }
+  if (message.providerMetadata) {
+    total += Math.min(estimateStructuredTokens(message.providerMetadata), 512);
+  }
+  return total;
+}
+
+function estimateMessagesTokens(messages: ChatMessage[]): number {
+  return messages.reduce((sum, message) => sum + estimateMessageTokens(message), 0);
+}
+
+function cloneMessages(messages: ChatMessage[]): ChatMessage[] {
+  return messages.map((message) => ({
+    ...message,
+    ...(message.images ? { images: [...message.images] } : {}),
+    ...(message.tool_calls
+      ? { tool_calls: message.tool_calls.map((call) => ({ ...call, function: { ...call.function } })) }
+      : {}),
+    ...(message.providerMetadata ? { providerMetadata: { ...message.providerMetadata } } : {}),
+  }));
+}
+
+function truncateContent(content: string, targetTokens: number, preserveStartOnly: boolean): string {
+  const targetChars = Math.max(MIN_CONTENT_CHARS, Math.floor(targetTokens * CHARS_PER_TOKEN));
+  if (Array.from(content).length <= targetChars) return content;
+
+  if (targetChars <= TRUNCATION_MARKER.length + MIN_CONTENT_CHARS) {
+    return Array.from(content).slice(0, targetChars).join("");
+  }
+
+  const availableChars = targetChars - TRUNCATION_MARKER.length;
+  const chars = Array.from(content);
+
+  if (preserveStartOnly) {
+    return chars.slice(0, availableChars).join("") + TRUNCATION_MARKER;
+  }
+
+  const headChars = Math.ceil(availableChars * 0.65);
+  const tailChars = Math.floor(availableChars * 0.35);
+  return chars.slice(0, headChars).join("") + TRUNCATION_MARKER + chars.slice(-tailChars).join("");
+}
+
+function findOldestRemovableConversationBlock(messages: ChatMessage[]): { start: number; deleteCount: number } | null {
+  for (let index = 0; index < messages.length - 1; index++) {
+    const message = messages[index]!;
+    if (message.role === "system") continue;
+
+    let deleteCount = 1;
+    if (message.role === "assistant" && message.tool_calls?.length) {
+      for (let nextIndex = index + 1; nextIndex < messages.length - 1; nextIndex++) {
+        if (messages[nextIndex]?.role !== "tool") break;
+        deleteCount += 1;
+      }
+    }
+
+    return { start: index, deleteCount };
+  }
+
+  return null;
+}
+
+function findOldestRemovableSystemMessage(messages: ChatMessage[]): number {
+  for (let index = 1; index < messages.length - 1; index++) {
+    if (messages[index]?.role === "system") return index;
+  }
+  return -1;
+}
+
+function findLargestMessageIndex(
+  messages: ChatMessage[],
+  predicate: (message: ChatMessage, index: number) => boolean,
+): number {
+  let selectedIndex = -1;
+  let selectedTokens = 0;
+
+  for (let index = 0; index < messages.length; index++) {
+    const message = messages[index]!;
+    if (!predicate(message, index) || !message.content) continue;
+    const tokenEstimate = estimateMessageTokens(message);
+    if (tokenEstimate > selectedTokens) {
+      selectedTokens = tokenEstimate;
+      selectedIndex = index;
+    }
+  }
+
+  return selectedIndex;
+}
+
+export function fitMessagesToContext(
+  messages: ChatMessage[],
+  options: Pick<ChatOptions, "maxContext" | "maxTokens">,
+  defaultMaxContext?: number,
+): ContextFitResult {
+  const requestedMaxTokens = normalizePositiveInteger(options.maxTokens);
+  const maxContext = minDefined(
+    normalizePositiveInteger(options.maxContext),
+    normalizePositiveInteger(defaultMaxContext),
+  );
+  const estimatedTokensBefore = estimateMessagesTokens(messages);
+
+  if (!maxContext) {
+    return {
+      messages,
+      maxTokens: requestedMaxTokens,
+      estimatedTokensBefore,
+      estimatedTokensAfter: estimatedTokensBefore,
+      trimmed: false,
+    };
+  }
+
+  const usableWindow = Math.max(1, maxContext - CONTEXT_SAFETY_MARGIN_TOKENS);
+  const reservedInputFloor = Math.min(MIN_INPUT_BUDGET_TOKENS, Math.max(0, usableWindow - 1));
+  const maxTokens =
+    requestedMaxTokens === undefined
+      ? undefined
+      : Math.max(1, Math.min(requestedMaxTokens, Math.max(1, usableWindow - reservedInputFloor)));
+  const inputBudget = Math.max(0, maxContext - (maxTokens ?? 0) - CONTEXT_SAFETY_MARGIN_TOKENS);
+
+  if (estimatedTokensBefore <= inputBudget) {
+    return {
+      messages,
+      maxContext,
+      maxTokens,
+      inputBudget,
+      estimatedTokensBefore,
+      estimatedTokensAfter: estimatedTokensBefore,
+      trimmed: false,
+    };
+  }
+
+  const fittedMessages = cloneMessages(messages);
+  let estimatedTokensAfter = estimateMessagesTokens(fittedMessages);
+
+  while (estimatedTokensAfter > inputBudget && fittedMessages.length > 1) {
+    const block = findOldestRemovableConversationBlock(fittedMessages);
+    if (!block) break;
+    fittedMessages.splice(block.start, block.deleteCount);
+    estimatedTokensAfter = estimateMessagesTokens(fittedMessages);
+  }
+
+  while (estimatedTokensAfter > inputBudget && fittedMessages.length > 1) {
+    const removableSystemIndex = findOldestRemovableSystemMessage(fittedMessages);
+    if (removableSystemIndex < 0) break;
+    fittedMessages.splice(removableSystemIndex, 1);
+    estimatedTokensAfter = estimateMessagesTokens(fittedMessages);
+  }
+
+  let guard = 0;
+  while (estimatedTokensAfter > inputBudget && guard < 12) {
+    guard += 1;
+
+    const systemIndex = findLargestMessageIndex(
+      fittedMessages,
+      (message, index) => message.role === "system" && index < fittedMessages.length,
+    );
+    if (systemIndex >= 0) {
+      const message = fittedMessages[systemIndex]!;
+      const nonContentTokens = estimateMessageTokens({ ...message, content: "" });
+      const excessTokens = estimatedTokensAfter - inputBudget;
+      const targetTokens = Math.max(8, estimateMessageTokens(message) - excessTokens - nonContentTokens);
+      const truncated = truncateContent(message.content, targetTokens, true);
+      if (truncated !== message.content) {
+        message.content = truncated;
+        estimatedTokensAfter = estimateMessagesTokens(fittedMessages);
+        continue;
+      }
+    }
+
+    const historicalIndex = findLargestMessageIndex(
+      fittedMessages,
+      (_message, index) => index < fittedMessages.length - 1,
+    );
+    if (historicalIndex >= 0) {
+      const message = fittedMessages[historicalIndex]!;
+      const nonContentTokens = estimateMessageTokens({ ...message, content: "" });
+      const excessTokens = estimatedTokensAfter - inputBudget;
+      const targetTokens = Math.max(8, estimateMessageTokens(message) - excessTokens - nonContentTokens);
+      const truncated = truncateContent(message.content, targetTokens, message.role === "system");
+      if (truncated !== message.content) {
+        message.content = truncated;
+        estimatedTokensAfter = estimateMessagesTokens(fittedMessages);
+        continue;
+      }
+    }
+
+    const lastIndex = fittedMessages.length - 1;
+    if (lastIndex >= 0) {
+      const message = fittedMessages[lastIndex]!;
+      const nonContentTokens = estimateMessageTokens({ ...message, content: "" });
+      const excessTokens = estimatedTokensAfter - inputBudget;
+      const targetTokens = Math.max(8, estimateMessageTokens(message) - excessTokens - nonContentTokens);
+      const truncated = truncateContent(message.content, targetTokens, false);
+      if (truncated !== message.content) {
+        message.content = truncated;
+        estimatedTokensAfter = estimateMessagesTokens(fittedMessages);
+        continue;
+      }
+    }
+
+    break;
+  }
+
+  return {
+    messages: fittedMessages,
+    maxContext,
+    maxTokens,
+    inputBudget,
+    estimatedTokensBefore,
+    estimatedTokensAfter,
+    trimmed: estimatedTokensAfter < estimatedTokensBefore,
+  };
+}
+
 /**
  * Sanitise raw error response text for display.
  * Strips HTML (Cloudflare/proxy error pages), extracts the title, and truncates.
@@ -138,7 +407,29 @@ export abstract class BaseLLMProvider {
   constructor(
     protected baseUrl: string,
     protected apiKey: string,
+    protected defaultMaxContext?: number,
+    protected defaultOpenrouterProvider?: string | null,
   ) {}
+
+  protected fitMessagesToContext(messages: ChatMessage[], options: Pick<ChatOptions, "maxContext" | "maxTokens">) {
+    return fitMessagesToContext(messages, options, this.defaultMaxContext);
+  }
+
+  protected logContextTrim(result: ContextFitResult, model: string): void {
+    if (!result.trimmed || !result.inputBudget) return;
+    console.warn(
+      "[LLM context] Trimmed prompt for %s from ~%d to ~%d tokens (budget ~%d, maxContext=%d)",
+      model,
+      result.estimatedTokensBefore,
+      result.estimatedTokensAfter,
+      result.inputBudget,
+      result.maxContext,
+    );
+  }
+
+  protected resolveOpenrouterProvider(openrouterProvider?: string | null): string | null | undefined {
+    return openrouterProvider ?? this.defaultOpenrouterProvider;
+  }
 
   /**
    * Stream a chat completion. Yields text chunks, optionally returns usage on completion.
@@ -152,7 +443,7 @@ export abstract class BaseLLMProvider {
    */
   async chatComplete(messages: ChatMessage[], options: ChatOptions): Promise<ChatCompletionResult> {
     let content = "";
-    const useStream = !!options.onToken;
+    const useStream = options.stream ?? !!options.onToken;
     const gen = this.chat(messages, { ...options, stream: useStream });
     let result = await gen.next();
     while (!result.done) {

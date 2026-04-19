@@ -1,30 +1,21 @@
 // ──────────────────────────────────────────────
 // Panel: API Connections (polished)
 // ──────────────────────────────────────────────
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   useConnections,
   useDuplicateConnection,
   useDeleteConnection,
   useUpdateConnection,
 } from "../../hooks/use-connections";
+import { useAgentConfigs, useCreateAgent, useUpdateAgent } from "../../hooks/use-agents";
 import { useChatStore } from "../../stores/chat.store";
 import { useUIStore } from "../../stores/ui.store";
 import { useSidecarStore } from "../../stores/sidecar.store";
-import {
-  Plus,
-  Trash2,
-  Link,
-  Check,
-  Shuffle,
-  ExternalLink,
-  X,
-  Copy,
-  BrainCircuit,
-  Download,
-  Trash,
-} from "lucide-react";
+import { BUILT_IN_AGENTS, LOCAL_SIDECAR_CONNECTION_ID, getDefaultAgentPrompt } from "@marinara-engine/shared";
+import { Plus, Trash2, Link, Check, Shuffle, ExternalLink, X, Copy, BrainCircuit, Download, Trash } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { toast } from "sonner";
 
 /** Provider → gradient color pair for connection icons. */
 const PROVIDER_COLORS: Record<string, { from: string; to: string; ring: string; badge: string }> = {
@@ -50,16 +41,68 @@ function formatBytes(bytes: number): string {
 }
 
 function SidecarCard() {
+  const { data: agentConfigs } = useAgentConfigs();
+  const createAgent = useCreateAgent();
+  const updateAgent = useUpdateAgent();
   const { status, config, modelDownloaded, modelSize, setShowDownloadModal, updateConfig, deleteModel, fetchStatus } =
     useSidecarStore();
   const isDownloaded = modelDownloaded;
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const activeModelName = isDownloaded ? config.modelPath?.split("/").pop() ?? null : null;
+  const [assigningTrackers, setAssigningTrackers] = useState(false);
+  const activeModelName = isDownloaded ? (config.modelPath?.split("/").pop() ?? null) : null;
+  const trackerAgents = useMemo(() => BUILT_IN_AGENTS.filter((agent) => agent.category === "tracker"), []);
+  const trackerLocalCount = useMemo(() => {
+    const configs = (agentConfigs ?? []) as Array<{ type: string; connectionId: string | null }>;
+    const byType = new Map(configs.map((cfg) => [cfg.type, cfg.connectionId]));
+    return trackerAgents.filter((agent) => byType.get(agent.id) === LOCAL_SIDECAR_CONNECTION_ID).length;
+  }, [agentConfigs, trackerAgents]);
 
   // Fetch status on mount (handles HMR store resets and initial load)
   useEffect(() => {
     fetchStatus();
   }, [fetchStatus]);
+
+  const handleAssignTrackersToLocal = async () => {
+    if (!isDownloaded || assigningTrackers) return;
+
+    setAssigningTrackers(true);
+    try {
+      const configs = (agentConfigs ?? []) as Array<{
+        id: string;
+        type: string;
+        connectionId: string | null;
+      }>;
+      const configByType = new Map(configs.map((cfg) => [cfg.type, cfg]));
+
+      await Promise.all(
+        trackerAgents.map(async (agent) => {
+          const existing = configByType.get(agent.id);
+          if (existing) {
+            if (existing.connectionId === LOCAL_SIDECAR_CONNECTION_ID) return;
+            await updateAgent.mutateAsync({ id: existing.id, connectionId: LOCAL_SIDECAR_CONNECTION_ID });
+            return;
+          }
+
+          await createAgent.mutateAsync({
+            type: agent.id,
+            name: agent.name,
+            description: agent.description,
+            phase: agent.phase,
+            enabled: agent.enabledByDefault,
+            connectionId: LOCAL_SIDECAR_CONNECTION_ID,
+            promptTemplate: getDefaultAgentPrompt(agent.id),
+            settings: {},
+          });
+        }),
+      );
+
+      toast.success("All built-in tracker agents now point to the local model.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update tracker agent connections.");
+    } finally {
+      setAssigningTrackers(false);
+    }
+  };
 
   return (
     <div className="rounded-xl border border-purple-400/20 bg-gradient-to-br from-purple-500/5 to-fuchsia-500/5 p-3">
@@ -124,30 +167,31 @@ function SidecarCard() {
           </button>
         )}
       </div>
-      {/* Toggles (only when model is downloaded) */}
+      {/* Local model actions (only when model is downloaded) */}
       {isDownloaded && (
         <div className="mt-2.5 flex flex-col gap-1.5 border-t border-purple-400/10 pt-2.5">
           <button
             type="button"
-            onClick={() => updateConfig({ useForTrackers: !config.useForTrackers })}
-            className="flex items-center gap-2.5 cursor-pointer select-none text-left"
+            onClick={() => void handleAssignTrackersToLocal()}
+            disabled={assigningTrackers}
+            className="flex items-center justify-between gap-3 rounded-lg border border-purple-400/15 bg-purple-400/8 px-3 py-2 text-left transition-all hover:bg-purple-400/12 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <div className="relative shrink-0">
-              <div
-                className={cn(
-                  "h-4 w-7 rounded-full transition-colors",
-                  config.useForTrackers ? "bg-purple-400/70" : "bg-[var(--border)]",
-                )}
-              />
-              <div
-                className={cn(
-                  "absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform",
-                  config.useForTrackers && "translate-x-3",
-                )}
-              />
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-medium text-purple-200">Use local model for all tracker agents</div>
+              <div className="mt-0.5 text-[0.625rem] text-[var(--muted-foreground)]">
+                Assigns the built-in local model as the connection override for every built-in tracker agent.
+              </div>
             </div>
-            <span className="text-xs text-[var(--muted-foreground)]">Use for tracker agents (roleplay)</span>
+            {assigningTrackers ? (
+              <BrainCircuit size="0.875rem" className="animate-pulse text-purple-300" />
+            ) : (
+              <Link size="0.875rem" className="text-purple-300" />
+            )}
           </button>
+          <p className="px-0.5 text-[0.625rem] text-[var(--muted-foreground)]">
+            {trackerLocalCount}/{trackerAgents.length} built-in tracker agents currently point at the local model. This
+            changes which model they use when enabled; it does not enable the agents by itself.
+          </p>
           <button
             type="button"
             onClick={() => updateConfig({ useForGameScene: !config.useForGameScene })}

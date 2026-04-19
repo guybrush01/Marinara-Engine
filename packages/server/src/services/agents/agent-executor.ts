@@ -75,6 +75,7 @@ export async function executeAgent(
     // Agents use lower temperature for reliability
     const temperature = (config.settings.temperature as number) ?? 0.3;
     const maxTokens = Math.max((config.settings.maxTokens as number) ?? 4096, 16384);
+    const streamResponses = context.streaming !== false;
 
     // If tools are available, use the tool call loop
     if (toolContext && toolContext.tools.length > 0) {
@@ -86,6 +87,7 @@ export async function executeAgent(
         temperature,
         maxTokens,
         toolContext,
+        streamResponses,
         startTime,
         context.signal,
       );
@@ -105,9 +107,12 @@ export async function executeAgent(
       model,
       temperature,
       maxTokens,
-      onToken: (chunk) => {
-        responseText += chunk;
-      },
+      stream: streamResponses,
+      onToken: streamResponses
+        ? (chunk) => {
+            responseText += chunk;
+          }
+        : undefined,
       signal: context.signal,
     });
 
@@ -150,6 +155,7 @@ async function executeAgentWithTools(
   temperature: number,
   maxTokens: number,
   toolContext: AgentToolContext,
+  streamResponses: boolean,
   startTime: number,
   signal?: AbortSignal,
 ): Promise<AgentResult> {
@@ -162,6 +168,7 @@ async function executeAgentWithTools(
       model,
       temperature,
       maxTokens,
+      stream: streamResponses,
       tools: toolContext.tools,
       signal,
     });
@@ -203,7 +210,13 @@ async function executeAgentWithTools(
   }
 
   // Exhausted tool rounds — make one final call without tools to get JSON response
-  const finalResult = await provider.chatComplete(loopMessages, { model, temperature, maxTokens, signal });
+  const finalResult = await provider.chatComplete(loopMessages, {
+    model,
+    temperature,
+    maxTokens,
+    stream: streamResponses,
+    signal,
+  });
   totalTokens += finalResult.usage?.totalTokens ?? 0;
   const responseText = finalResult.content?.trim() ?? "";
   const parsed = parseAgentResponse(config.type, responseText);
@@ -259,6 +272,7 @@ export async function executeAgentBatch(
     const maxTokensPerAgent = Math.max(...configs.map((c) => (c.settings.maxTokens as number) ?? 4096));
     const temperature = Math.min(...configs.map((c) => (c.settings.temperature as number) ?? 0.3));
     const batchMaxTokens = Math.max(maxTokensPerAgent * configs.length, 16384);
+    const streamResponses = context.streaming !== false;
     console.log(
       `[agent-batch] maxTokens: ${batchMaxTokens} (${maxTokensPerAgent} × ${configs.length} agents, floor 16384)`,
     );
@@ -278,9 +292,12 @@ export async function executeAgentBatch(
       model,
       temperature,
       maxTokens: batchMaxTokens,
-      onToken: (chunk) => {
-        responseText += chunk;
-      },
+      stream: streamResponses,
+      onToken: streamResponses
+        ? (chunk) => {
+            responseText += chunk;
+          }
+        : undefined,
       signal: context.signal,
     });
 

@@ -33,6 +33,7 @@ import {
   ImageDown,
 } from "lucide-react";
 import { cn, generateClientId } from "../../lib/utils";
+import { extractColorsFromImage } from "../../lib/avatar-color-extraction";
 import { HelpTooltip } from "../ui/HelpTooltip";
 import { ColorPicker } from "../ui/ColorPicker";
 import { ExpandedTextarea } from "../ui/ExpandedTextarea";
@@ -424,7 +425,9 @@ export function PersonaEditor() {
                 rows={8}
               />
             )}
-            {activeTab === "colors" && <PersonaColorsTab formData={formData} updateField={updateField} />}
+            {activeTab === "colors" && (
+              <PersonaColorsTab formData={formData} updateField={updateField} avatarUrl={avatarPreview} />
+            )}
             {activeTab === "sprites" && personaId && (
               <PersonaSpritesTab
                 personaId={personaId}
@@ -837,10 +840,29 @@ function PersonaSpritesTab({
 function PersonaColorsTab({
   formData,
   updateField,
+  avatarUrl,
 }: {
   formData: PersonaFormData;
   updateField: <K extends keyof PersonaFormData>(key: K, value: PersonaFormData[K]) => void;
+  avatarUrl: string | null;
 }) {
+  const [extracting, setExtracting] = useState(false);
+
+  const handleExtract = async () => {
+    if (!avatarUrl) return;
+    setExtracting(true);
+    try {
+      const [nameColor, dialogueColor, boxColor] = await extractColorsFromImage(avatarUrl);
+      updateField("nameColor", nameColor);
+      updateField("dialogueColor", dialogueColor);
+      updateField("boxColor", boxColor);
+    } catch {
+      // silently ignore — user can just pick colors manually
+    } finally {
+      setExtracting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <SectionHeader
@@ -848,7 +870,21 @@ function PersonaColorsTab({
         subtitle="Customize how your persona appears in chats. Colors are applied to your name, dialogue, and message bubble."
       />
 
-      {/* Preview card */}
+      <button
+        type="button"
+        disabled={!avatarUrl || extracting}
+        onClick={handleExtract}
+        className={cn(
+          "flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-medium transition-all",
+          avatarUrl
+            ? "bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 active:scale-[0.98]"
+            : "cursor-not-allowed bg-white/5 text-[var(--muted-foreground)]/50",
+        )}
+      >
+        {extracting ? <Loader2 size="0.875rem" className="animate-spin" /> : <Palette size="0.875rem" />}
+        {extracting ? "Extracting..." : avatarUrl ? "Extract Colors from Avatar" : "Upload an avatar first"}
+      </button>
+
       <div className="rounded-xl border border-[var(--border)] bg-black/30 p-4 space-y-3">
         <p className="text-[0.625rem] font-medium uppercase tracking-widest text-[var(--muted-foreground)]">Preview</p>
         <div className="flex gap-3 flex-row-reverse">
@@ -898,7 +934,7 @@ function PersonaColorsTab({
         onChange={(v) => updateField("nameColor", v)}
         gradient
         label="Name Display Color"
-        helpText="The color (or gradient) used for your persona's name in chat messages. Supports gradients!"
+        helpText="The color (or gradient) used for your persona's name in chat messages and persona selectors. Supports gradients!"
       />
 
       {/* Dialogue Color */}
@@ -916,8 +952,27 @@ function PersonaColorsTab({
         value={formData.boxColor}
         onChange={(v) => updateField("boxColor", v)}
         label="Message Box Color"
-        helpText="Background color for your persona's chat message bubbles."
+        helpText="Background color for your persona's chat message bubbles. Use a semi-transparent color for best results (e.g. rgba)."
       />
+
+      <div className="rounded-xl bg-[var(--card)] p-4 ring-1 ring-[var(--border)]">
+        <h4 className="mb-1.5 text-xs font-semibold">How colors work</h4>
+        <ul className="space-y-1 text-[0.6875rem] text-[var(--muted-foreground)]">
+          <li>
+            &bull; <strong className="text-[var(--foreground)]">Name color</strong> — Applied to your persona&apos;s
+            display name in chat. Gradients use CSS linear-gradient.
+          </li>
+          <li>
+            &bull; <strong className="text-[var(--foreground)]">Dialogue color</strong> — All text inside double quotes
+            is automatically bold and colored with this value.
+          </li>
+          <li>
+            &bull; <strong className="text-[var(--foreground)]">Box color</strong> — Sets the background color of your
+            persona&apos;s message bubble.
+          </li>
+          <li>&bull; Leave any field empty to use the default theme colors.</li>
+        </ul>
+      </div>
     </div>
   );
 }

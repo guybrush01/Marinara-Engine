@@ -72,7 +72,7 @@ async function translateWithAI(
     throw Object.assign(new Error("No base URL configured for this connection"), { statusCode: 400 });
   }
 
-  const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey);
+  const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey, conn.maxContext, conn.openrouterProvider);
   const result = await provider.chatComplete(
     [
       {

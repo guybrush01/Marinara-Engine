@@ -37,7 +37,13 @@ import {
 import { cn } from "../../lib/utils";
 import { DraftNumberInput } from "../ui/DraftNumberInput";
 import { HelpTooltip } from "../ui/HelpTooltip";
-import { PROVIDERS, MODEL_LISTS, IMAGE_GENERATION_SOURCES, type APIProvider } from "@marinara-engine/shared";
+import {
+  PROVIDERS,
+  MODEL_LISTS,
+  IMAGE_GENERATION_SOURCES,
+  inferImageSource,
+  type APIProvider,
+} from "@marinara-engine/shared";
 
 /** Links where users can obtain API keys for each provider */
 const API_KEY_LINKS: Partial<Record<APIProvider, { label: string; url: string }>> = {
@@ -88,6 +94,7 @@ export function ConnectionEditor() {
   const [localEmbeddingBaseUrl, setLocalEmbeddingBaseUrl] = useState("");
   const [localEmbeddingConnectionId, setLocalEmbeddingConnectionId] = useState("");
   const [localOpenrouterProvider, setLocalOpenrouterProvider] = useState("");
+  const [localImageGenerationSource, setLocalImageGenerationSource] = useState("");
   const [localComfyuiWorkflow, setLocalComfyuiWorkflow] = useState("");
   const [localImageService, setLocalImageService] = useState<string | null>(null);
 
@@ -165,13 +172,30 @@ export function ConnectionEditor() {
     setLocalEmbeddingBaseUrl((c.embeddingBaseUrl as string) ?? "");
     setLocalEmbeddingConnectionId((c.embeddingConnectionId as string) ?? "");
     setLocalOpenrouterProvider((c.openrouterProvider as string) ?? "");
+    setLocalImageGenerationSource(
+      (c.provider as APIProvider) === "image_generation"
+        ? ((c.imageGenerationSource as string) ??
+            (c.imageService as string) ??
+            inferImageSource((c.model as string) ?? "", (c.baseUrl as string) ?? ""))
+        : "",
+    );
     setLocalComfyuiWorkflow((c.comfyuiWorkflow as string) ?? "");
-    setLocalImageService((c.imageService as string | null) ?? null);
+    setLocalImageService(((c.imageService as string | null) ?? (c.imageGenerationSource as string | null)) || null);
     setDirty(false);
     setSaveError(null);
     setTestResult(null);
     setMsgResult(null);
   }, [conn]);
+
+  const effectiveImageGenerationSource = useMemo(() => {
+    if (localProvider !== "image_generation") return "";
+    return localImageGenerationSource || localImageService || inferImageSource(localModel, localBaseUrl);
+  }, [localProvider, localImageGenerationSource, localImageService, localModel, localBaseUrl]);
+
+  const selectedImageService =
+    localProvider === "image_generation"
+      ? localImageGenerationSource || localImageService || effectiveImageGenerationSource
+      : "";
 
   // Model list for current provider
   const providerModels = useMemo(() => {
@@ -228,8 +252,11 @@ export function ConnectionEditor() {
       embeddingBaseUrl: localEmbeddingBaseUrl,
       embeddingConnectionId: localEmbeddingConnectionId || null,
       openrouterProvider: localOpenrouterProvider || null,
+      imageGenerationSource:
+        localProvider === "image_generation" ? localImageGenerationSource || localImageService || null : null,
       comfyuiWorkflow: localComfyuiWorkflow || null,
-      imageService: localImageService || null,
+      imageService:
+        localProvider === "image_generation" ? localImageGenerationSource || localImageService || null : null,
     };
     // Only send API key if user typed a new one
     if (localApiKey.trim()) {
@@ -257,6 +284,7 @@ export function ConnectionEditor() {
     localEmbeddingBaseUrl,
     localEmbeddingConnectionId,
     localOpenrouterProvider,
+    localImageGenerationSource,
     localComfyuiWorkflow,
     localImageService,
     updateConnection,
@@ -633,19 +661,26 @@ export function ConnectionEditor() {
           {/* ── Image Service (only for image_generation provider) ── */}
           {localProvider === "image_generation" && (
             <FieldGroup
-              label="Image Service"
+              label="Service"
               icon={<Globe size="0.875rem" className="text-sky-400" />}
-              help="Select which image generation service to use. This sets the Base URL automatically. You can also set a custom URL in the Base URL field above."
+              help="Pick the backend type once, then point Base URL to any host or port. Provider-specific features such as ComfyUI workflow JSON and checkpoint fetching use this selection."
             >
               <div className="grid grid-cols-2 gap-1.5">
                 {IMAGE_GENERATION_SOURCES.map((src) => {
-                  const isActive = localImageService ? localImageService === src.id : localBaseUrl === src.defaultBaseUrl;
+                  const isActive = selectedImageService === src.id;
                   return (
                     <button
                       key={src.id}
                       onClick={() => {
+                        const previousSource = IMAGE_GENERATION_SOURCES.find(
+                          (candidate) => candidate.id === selectedImageService,
+                        );
+                        const shouldSeedBaseUrl = !localBaseUrl || localBaseUrl === previousSource?.defaultBaseUrl;
+                        setLocalImageGenerationSource(src.id);
                         setLocalImageService(src.id);
-                        setLocalBaseUrl(src.defaultBaseUrl);
+                        if (shouldSeedBaseUrl) {
+                          setLocalBaseUrl(src.defaultBaseUrl);
+                        }
                         markDirty();
                       }}
                       className={cn(
@@ -664,6 +699,10 @@ export function ConnectionEditor() {
                   );
                 })}
               </div>
+              <p className="text-[0.625rem] text-[var(--muted-foreground)]">
+                Pick the backend type once, then point Base URL to any host or port. Provider-specific features like
+                ComfyUI workflow JSON and checkpoint fetching use this selection, not the default localhost URL.
+              </p>
             </FieldGroup>
           )}
 
@@ -910,30 +949,27 @@ export function ConnectionEditor() {
           </FieldGroup>
 
           {/* ── ComfyUI Workflow ── */}
-          {localProvider === "image_generation" &&
-            (localImageService === "comfyui" ||
-              (!localImageService &&
-                (localBaseUrl.includes(":8188") || localBaseUrl.toLowerCase().includes("comfyui")))) && (
-              <FieldGroup
-                label="ComfyUI Workflow (Optional)"
-                icon={<Zap size="0.875rem" className="text-sky-400" />}
-                help="Paste a custom ComfyUI workflow JSON (API format). Use placeholders: %prompt%, %negative_prompt%, %width%, %height%, %seed%, %model%. Leave empty to use the built-in default txt2img workflow."
-              >
-                <textarea
-                  value={localComfyuiWorkflow}
-                  onChange={(e) => {
-                    setLocalComfyuiWorkflow(e.target.value);
-                    markDirty();
-                  }}
-                  placeholder='Paste workflow JSON here (exported from ComfyUI via "Save (API Format)")…'
-                  className="w-full rounded-xl bg-[var(--secondary)] px-3 py-2.5 text-xs font-mono outline-none ring-1 ring-[var(--border)] transition-shadow placeholder:text-[var(--muted-foreground)]/50 focus:ring-sky-400/50 min-h-[120px] max-h-[300px] resize-y"
-                />
-                <p className="text-[0.55rem] text-[var(--muted-foreground)] mt-1">
-                  Export your workflow from ComfyUI using <strong>Save (API Format)</strong> in the menu. Placeholders
-                  like <code>%prompt%</code> will be replaced at generation time.
-                </p>
-              </FieldGroup>
-            )}
+          {localProvider === "image_generation" && selectedImageService === "comfyui" && (
+            <FieldGroup
+              label="ComfyUI Workflow (Optional)"
+              icon={<Zap size="0.875rem" className="text-sky-400" />}
+              help="Paste a custom ComfyUI workflow JSON (API format). Use placeholders: %prompt%, %negative_prompt%, %width%, %height%, %seed%, %model%. Leave empty to use the built-in default txt2img workflow."
+            >
+              <textarea
+                value={localComfyuiWorkflow}
+                onChange={(e) => {
+                  setLocalComfyuiWorkflow(e.target.value);
+                  markDirty();
+                }}
+                placeholder='Paste workflow JSON here (exported from ComfyUI via "Save (API Format)")…'
+                className="w-full rounded-xl bg-[var(--secondary)] px-3 py-2.5 text-xs font-mono outline-none ring-1 ring-[var(--border)] transition-shadow placeholder:text-[var(--muted-foreground)]/50 focus:ring-sky-400/50 min-h-[120px] max-h-[300px] resize-y"
+              />
+              <p className="text-[0.55rem] text-[var(--muted-foreground)] mt-1">
+                Export your workflow from ComfyUI using <strong>Save (API Format)</strong> in the menu. Placeholders
+                like <code>%prompt%</code> will be replaced at generation time.
+              </p>
+            </FieldGroup>
+          )}
 
           {/* ── Max Context ── */}
           {localProvider !== "image_generation" && (

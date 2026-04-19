@@ -80,11 +80,7 @@ export function CreatePersonaModal({ open, onClose }: Props) {
             disabled={!name.trim() || createPersona.isPending}
             className="flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-4 py-2 text-xs font-medium text-[var(--primary-foreground)] transition-all hover:opacity-90 disabled:opacity-50"
           >
-            {createPersona.isPending ? (
-              <Loader2 size="0.75rem" className="animate-spin" />
-            ) : (
-              <User size="0.75rem" />
-            )}
+            {createPersona.isPending ? <Loader2 size="0.75rem" className="animate-spin" /> : <User size="0.75rem" />}
             Create
           </button>
         </div>

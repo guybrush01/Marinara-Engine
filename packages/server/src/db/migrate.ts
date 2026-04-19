@@ -478,6 +478,11 @@ const COLUMN_MIGRATIONS: ColumnMigration[] = [
   },
   {
     table: "api_connections",
+    column: "image_generation_source",
+    definition: "TEXT",
+  },
+  {
+    table: "api_connections",
     column: "comfyui_workflow",
     definition: "TEXT",
   },

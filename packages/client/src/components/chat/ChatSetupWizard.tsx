@@ -85,6 +85,21 @@ interface ChatSetupWizardProps {
   onFinish: () => void;
 }
 
+interface PersonaDisplayInfo {
+  name: string;
+  comment?: string | null;
+}
+
+function getPersonaTitle(persona: PersonaDisplayInfo): string | null {
+  const title = persona.comment?.trim();
+  return title ? title : null;
+}
+
+function formatPersonaLabel(persona: PersonaDisplayInfo): string {
+  const title = getPersonaTitle(persona);
+  return title ? `${persona.name} - ${title}` : persona.name;
+}
+
 export function ChatSetupWizard({ chat, onFinish }: ChatSetupWizardProps) {
   const chatMode = (chat as unknown as { mode?: string }).mode ?? "roleplay";
 
@@ -131,7 +146,12 @@ function ConversationQuickSetup({ chat, onFinish }: ChatSetupWizardProps) {
     () => (allCharacters ?? []) as Array<{ id: string; data: string; avatarPath: string | null }>,
     [allCharacters],
   );
-  const personas = (allPersonas ?? []) as Array<{ id: string; name: string; avatarPath: string | null }>;
+  const personas = (allPersonas ?? []) as Array<{
+    id: string;
+    name: string;
+    avatarPath: string | null;
+    comment?: string | null;
+  }>;
 
   const chatCharIds: string[] = useMemo(() => {
     return typeof chat.characterIds === "string" ? JSON.parse(chat.characterIds) : (chat.characterIds ?? []);
@@ -317,7 +337,7 @@ function ConversationQuickSetup({ chat, onFinish }: ChatSetupWizardProps) {
                 <option value="">None</option>
                 {personas.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name}
+                    {formatPersonaLabel(p)}
                   </option>
                 ))}
               </select>
@@ -587,7 +607,12 @@ function RoleplaySetupWizard({ chat, onFinish }: ChatSetupWizardProps) {
   const chatPresetList = useMemo(() => (chatPresetsData ?? []) as ChatPreset[], [chatPresetsData]);
   const applyChatPreset = useApplyChatPreset();
 
-  const personas = (allPersonas ?? []) as Array<{ id: string; name: string; avatarPath: string | null }>;
+  const personas = (allPersonas ?? []) as Array<{
+    id: string;
+    name: string;
+    avatarPath: string | null;
+    comment?: string | null;
+  }>;
   const characters = useMemo(
     () => (allCharacters ?? []) as Array<{ id: string; data: string; avatarPath: string | null }>,
     [allCharacters],
@@ -851,7 +876,7 @@ function RoleplaySetupWizard({ chat, onFinish }: ChatSetupWizardProps) {
         <option value="">None</option>
         {personas.map((p) => (
           <option key={p.id} value={p.id}>
-            {p.name}
+            {formatPersonaLabel(p)}
           </option>
         ))}
       </select>
@@ -1115,7 +1140,7 @@ function RoleplaySetupWizard({ chat, onFinish }: ChatSetupWizardProps) {
                     <option value="">None</option>
                     {personas.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.name}
+                        {formatPersonaLabel(p)}
                       </option>
                     ))}
                   </select>

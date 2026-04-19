@@ -147,6 +147,9 @@ export function useCreatePersona() {
       nameColor?: string;
       dialogueColor?: string;
       boxColor?: string;
+      personaStats?: string;
+      altDescriptions?: string;
+      tags?: string;
     }) => api.post("/characters/personas", data),
     onSuccess: () => qc.invalidateQueries({ queryKey: characterKeys.personas }),
   });

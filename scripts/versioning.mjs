@@ -8,7 +8,7 @@ export const REPO_ROOT = resolve(__dirname, "..");
 const README_RELEASE_LINE =
   "Current stable release: **[v%s](https://github.com/Pasta-Devs/Marinara-Engine/releases/tag/v%s)**.";
 const README_INSTALLER_LINE =
-  "Download **[Marinara-Engine-Installer-%s.exe](https://github.com/Pasta-Devs/Marinara-Engine/releases/download/v%s/Marinara-Engine-Installer-%s.exe)** from the [Releases](https://github.com/Pasta-Devs/Marinara-Engine/releases) page and run it. The installer checks for Node.js and Git, clones the repo, installs dependencies, builds the app, and creates a desktop shortcut.";
+  "Download **[Marinara-Engine-Installer-%s.exe](https://github.com/Pasta-Devs/Marinara-Engine/releases/download/v%s/Marinara-Engine-Installer-%s.exe)** from the [Releases](https://github.com/Pasta-Devs/Marinara-Engine/releases) page and run it. The installer lets you choose the install folder, checks for Node.js and Git, aligns pnpm to the repo-pinned version even if an older global pnpm is already installed, clones the repo, installs dependencies, builds the app, and creates desktop and Start Menu shortcuts with the Marinara icon.";
 
 function format(template, ...values) {
   let next = template;
@@ -95,7 +95,7 @@ function updateReadme(content, version) {
 
   next = replaceOrThrow(
     next,
-    /Download \*\*\[Marinara-Engine-Installer-[^\]]+\.exe\]\(https:\/\/github\.com\/Pasta-Devs\/Marinara-Engine\/releases\/download\/v[^/]+\/Marinara-Engine-Installer-[^)]+\.exe\)\*\* from the \[Releases\]\(https:\/\/github\.com\/Pasta-Devs\/Marinara-Engine\/releases\) page and run it\. The installer checks for Node\.js and Git, clones the repo, installs dependencies, builds the app, and creates a desktop shortcut\./,
+    /Download \*\*\[Marinara-Engine-Installer-[^\]]+\.exe\]\(https:\/\/github\.com\/Pasta-Devs\/Marinara-Engine\/releases\/download\/v[^/]+\/Marinara-Engine-Installer-[^)]+\.exe\)\*\* from the \[Releases\]\(https:\/\/github\.com\/Pasta-Devs\/Marinara-Engine\/releases\) page and run it\.[^\n]*/,
     format(README_INSTALLER_LINE, version, version, version),
     "README installer release line",
   );

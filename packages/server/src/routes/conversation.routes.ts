@@ -70,7 +70,7 @@ export async function conversationRoutes(app: FastifyInstance) {
           ? JSON.parse(chat.characterIds)
           : chat.characterIds;
 
-    const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey);
+    const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey, conn.maxContext, conn.openrouterProvider);
     const model = conn.model ?? "";
     const mondayStr = getMonday().toISOString();
 
@@ -233,6 +233,19 @@ export async function conversationRoutes(app: FastifyInstance) {
     for (const charId of characterIds) {
       const schedule = schedules[charId];
       if (!schedule) {
+        const charRow = await chars.getById(charId);
+        if (charRow) {
+          const charData = JSON.parse(charRow.data as string) as CharacterData;
+          const currentExtensions = (charData.extensions as Record<string, unknown> | undefined) ?? {};
+          if (currentExtensions.conversationStatus !== "online" || currentExtensions.conversationActivity != null) {
+            const extensions: Record<string, unknown> = {
+              ...currentExtensions,
+              conversationStatus: "online",
+            };
+            delete extensions.conversationActivity;
+            await chars.update(charId, { extensions } as Partial<CharacterData>);
+          }
+        }
         statuses[charId] = { status: "online", activity: "unknown (no schedule)" };
         continue;
       }

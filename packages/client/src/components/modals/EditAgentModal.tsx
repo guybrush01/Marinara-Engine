@@ -7,7 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api-client";
 import { useConnections } from "../../hooks/use-connections";
 import { Loader2, Sparkles, Save } from "lucide-react";
-import type { AgentPhase } from "@marinara-engine/shared";
+import { LOCAL_SIDECAR_CONNECTION_ID, type AgentPhase } from "@marinara-engine/shared";
 
 export interface AgentData {
   id?: string;
@@ -169,12 +169,18 @@ export function EditAgentModal({ open, onClose, agent }: Props) {
             className="w-full rounded-lg bg-[var(--secondary)] px-3 py-2 text-sm outline-none ring-1 ring-transparent transition-shadow focus:ring-[var(--primary)]"
           >
             <option value="">Use default connection</option>
+            <option value={LOCAL_SIDECAR_CONNECTION_ID}>Local Model (sidecar)</option>
             {(connections as Array<{ id: string; name: string; provider: string }> | undefined)?.map((conn) => (
               <option key={conn.id} value={conn.id}>
                 {conn.name} ({conn.provider})
               </option>
             ))}
           </select>
+          <span className="text-[0.625rem] text-[var(--muted-foreground)]">
+            {form.connectionId === LOCAL_SIDECAR_CONNECTION_ID
+              ? "This agent will use the built-in Local Model from the Connections panel."
+              : "Leave empty to use the default agent connection or the chat connection."}
+          </span>
         </label>
 
         {/* Prompt Template */}

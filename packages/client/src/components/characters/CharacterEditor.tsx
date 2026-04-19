@@ -13,6 +13,8 @@ import {
   useUploadAvatar,
   useDeleteCharacter,
   useDuplicateCharacter,
+  useCreatePersona,
+  useUploadPersonaAvatar,
   useCharacterSprites,
   useUploadSprite,
   useDeleteSprite,
@@ -53,8 +55,10 @@ import {
   Maximize2,
   ImageDown,
   Wand2,
+  UserPlus,
 } from "lucide-react";
 import { cn, getAvatarCropStyle } from "../../lib/utils";
+import { extractColorsFromImage } from "../../lib/avatar-color-extraction";
 import { HelpTooltip } from "../ui/HelpTooltip";
 import { api } from "../../lib/api-client";
 import { ColorPicker } from "../ui/ColorPicker";
@@ -94,6 +98,8 @@ export function CharacterEditor() {
   const uploadAvatar = useUploadAvatar();
   const deleteCharacter = useDeleteCharacter();
   const duplicateCharacter = useDuplicateCharacter();
+  const createPersona = useCreatePersona();
+  const uploadPersonaAvatar = useUploadPersonaAvatar();
 
   const [activeTab, setActiveTab] = useState<TabId>("metadata");
   const [formData, setFormData] = useState<CharacterData | null>(null);
@@ -171,6 +177,98 @@ export function CharacterEditor() {
     await deleteCharacter.mutateAsync(characterId);
     closeDetail();
   };
+
+  const getAvatarDataUrl = useCallback(async (src: string) => {
+    if (src.startsWith("data:")) return src;
+
+    const response = await fetch(src);
+    if (!response.ok) {
+      throw new Error("Failed to read character avatar");
+    }
+
+    const blob = await response.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === "string") {
+          resolve(reader.result);
+          return;
+        }
+        reject(new Error("Failed to convert avatar"));
+      };
+      reader.onerror = () => reject(reader.error ?? new Error("Failed to convert avatar"));
+      reader.readAsDataURL(blob);
+    });
+  }, []);
+
+  const handleImportAsPersona = useCallback(async () => {
+    if (!formData) return;
+
+    const personaName = formData.name.trim();
+    if (!personaName) {
+      toast.error("Character needs a name before it can be imported as a persona.");
+      return;
+    }
+
+    const rpgStats = formData.extensions.rpgStats as RPGStatsConfig | undefined;
+    const personaStats = rpgStats
+      ? JSON.stringify({
+          enabled: !!rpgStats.enabled,
+          bars: [
+            { name: "Satiety", value: 100, max: 100, color: "#f59e0b" },
+            { name: "Energy", value: 100, max: 100, color: "#22c55e" },
+            { name: "Hygiene", value: 100, max: 100, color: "#3b82f6" },
+            { name: "Mood", value: 100, max: 100, color: "#ec4899" },
+          ],
+          rpgStats,
+        })
+      : "";
+
+    try {
+      const created = (await createPersona.mutateAsync({
+        name: personaName,
+        comment: formData.creator_notes ?? "",
+        description: formData.description ?? "",
+        personality: formData.personality ?? "",
+        scenario: formData.scenario ?? "",
+        backstory: (formData.extensions.backstory as string) ?? "",
+        appearance: (formData.extensions.appearance as string) ?? "",
+        nameColor: (formData.extensions.nameColor as string) ?? "",
+        dialogueColor: (formData.extensions.dialogueColor as string) ?? "",
+        boxColor: (formData.extensions.boxColor as string) ?? "",
+        personaStats,
+        altDescriptions: "[]",
+        tags: JSON.stringify(formData.tags ?? []),
+      })) as { id?: string };
+
+      const personaId = created?.id;
+      if (!personaId) {
+        throw new Error("Persona was created without an id");
+      }
+
+      if (avatarPreview) {
+        try {
+          const avatarDataUrl = await getAvatarDataUrl(avatarPreview);
+          const extMatch = avatarDataUrl.match(/^data:image\/([\w+]+)/);
+          const ext = extMatch?.[1]?.replace("+xml", "") || "png";
+          await uploadPersonaAvatar.mutateAsync({
+            id: personaId,
+            avatar: avatarDataUrl,
+            filename: `persona-${personaId}-${Date.now()}.${ext}`,
+          });
+        } catch (error) {
+          console.warn("[CharacterEditor] Failed to copy avatar to imported persona:", error);
+          toast.error("Persona imported, but the avatar could not be copied.");
+          return;
+        }
+      }
+
+      toast.success(`Imported "${personaName}" as a persona.`);
+    } catch (error) {
+      console.error("[CharacterEditor] Failed to import character as persona:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to import character as persona.");
+    }
+  }, [avatarPreview, createPersona, formData, getAvatarDataUrl, uploadPersonaAvatar]);
 
   const handleClose = useCallback(() => {
     if (dirty) {
@@ -288,6 +386,20 @@ export function CharacterEditor() {
             />
             <rect x="3" y="15" width="14" height="2" rx="1" fill="currentColor" />
           </svg>
+        </button>
+
+        {/* Import as persona */}
+        <button
+          onClick={handleImportAsPersona}
+          disabled={createPersona.isPending || uploadPersonaAvatar.isPending}
+          className="rounded-xl p-2 text-[var(--muted-foreground)] transition-all hover:bg-emerald-500/10 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+          title="Import character as persona"
+        >
+          {createPersona.isPending || uploadPersonaAvatar.isPending ? (
+            <Loader2 size="1.125rem" className="animate-spin" />
+          ) : (
+            <UserPlus size="1.125rem" />
+          )}
         </button>
 
         {/* Export as PNG */}
@@ -1691,90 +1803,6 @@ function StatsTab({
 }
 
 // ── Colors Tab ──
-
-function extractColorsFromImage(imgSrc: string): Promise<[string, string, string]> {
-  return new Promise((resolve, reject) => {
-    const img = new window.Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      const size = 64;
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return reject(new Error("Canvas not available"));
-      ctx.drawImage(img, 0, 0, size, size);
-      const { data } = ctx.getImageData(0, 0, size, size);
-
-      // Collect non-transparent, non-near-black/white pixels
-      const pixels: [number, number, number][] = [];
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i],
-          g = data[i + 1],
-          b = data[i + 2],
-          a = data[i + 3];
-        if (a < 128) continue;
-        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-        if (lum < 15 || lum > 240) continue;
-        pixels.push([r, g, b]);
-      }
-      if (pixels.length < 3) return reject(new Error("Not enough color data in the avatar"));
-
-      // Simple median-cut quantization to find 3 dominant colors
-      const buckets = medianCut(pixels, 3);
-      const colors = buckets.map((bucket) => {
-        const avg = bucket.reduce((acc, p) => [acc[0] + p[0], acc[1] + p[1], acc[2] + p[2]], [0, 0, 0] as [
-          number,
-          number,
-          number,
-        ]);
-        return [
-          Math.round(avg[0] / bucket.length),
-          Math.round(avg[1] / bucket.length),
-          Math.round(avg[2] / bucket.length),
-        ] as [number, number, number];
-      });
-
-      // Sort by saturation desc — most vibrant first
-      const sat = ([r, g, b]: [number, number, number]) => {
-        const max = Math.max(r, g, b),
-          min = Math.min(r, g, b);
-        return max === 0 ? 0 : (max - min) / max;
-      };
-      colors.sort((a, b) => sat(b) - sat(a));
-
-      const hex = ([r, g, b]: [number, number, number]) =>
-        `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
-
-      const nameColor = hex(colors[0]);
-      const dialogueColor = hex(colors[1] ?? colors[0]);
-      const boxRgb = colors[2] ?? colors[1] ?? colors[0];
-      const boxColor = `rgba(${boxRgb[0]}, ${boxRgb[1]}, ${boxRgb[2]}, 0.25)`;
-
-      resolve([nameColor, dialogueColor, boxColor]);
-    };
-    img.onerror = () => reject(new Error("Failed to load avatar image"));
-    img.src = imgSrc;
-  });
-}
-
-function medianCut(pixels: [number, number, number][], depth: number): [number, number, number][][] {
-  if (depth <= 1 || pixels.length < 2) return [pixels];
-  // Find channel with widest range
-  let maxRange = 0,
-    splitCh = 0;
-  for (let ch = 0; ch < 3; ch++) {
-    const vals = pixels.map((p) => p[ch]);
-    const range = Math.max(...vals) - Math.min(...vals);
-    if (range > maxRange) {
-      maxRange = range;
-      splitCh = ch;
-    }
-  }
-  pixels.sort((a, b) => a[splitCh] - b[splitCh]);
-  const mid = Math.floor(pixels.length / 2);
-  return [...medianCut(pixels.slice(0, mid), depth - 1), ...medianCut(pixels.slice(mid), depth - 1)];
-}
 
 function ColorsTab({
   formData,

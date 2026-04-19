@@ -11,6 +11,7 @@ import { assemblePrompt, type AssemblerInput } from "../services/prompt/index.js
 const reviewRequestSchema = z.object({
   presetId: z.string().min(1),
   connectionId: z.string().min(1),
+  streaming: z.boolean().optional().default(true),
   /** Focus areas for the review */
   focusAreas: z
     .array(z.enum(["clarity", "consistency", "coverage", "jailbreak_safety", "token_efficiency", "role_balance"]))
@@ -130,7 +131,7 @@ export async function promptReviewerRoutes(app: FastifyInstance) {
     });
 
     try {
-      const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey);
+      const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey, conn.maxContext, conn.openrouterProvider);
       let fullResponse = "";
 
       const userPrompt = `Review this prompt preset. Focus areas: ${input.focusAreas.join(", ")}
@@ -152,7 +153,7 @@ ${assembledView}`;
           model: conn.model,
           temperature: 0.7,
           maxTokens: 8192,
-          stream: true,
+          stream: input.streaming,
         },
       )) {
         fullResponse += chunk;

@@ -57,15 +57,12 @@ export function ModelDownloadModal({ open, onClose }: Props) {
   const isDownloading = downloadProgress?.status === "downloading";
   const hasModel = modelDownloaded;
   const activeModelName = useMemo(
-    () => (hasModel ? config.modelPath?.split("/").pop() ?? null : null),
+    () => (hasModel ? (config.modelPath?.split("/").pop() ?? null) : null),
     [config.modelPath, hasModel],
   );
-  const shouldAutoStart = config.useForTrackers || config.useForGameScene;
+  const shouldAutoStart = config.useForGameScene;
   const isPreparingServer =
-    hasModel &&
-    shouldAutoStart &&
-    !inferenceReady &&
-    (status === "starting_server" || status === "downloaded");
+    hasModel && shouldAutoStart && !inferenceReady && (status === "starting_server" || status === "downloaded");
   const isSetupBusy = isDownloading || status === "downloading_runtime" || isPreparingServer;
   const canFinish = status === "ready" && inferenceReady;
 
@@ -270,7 +267,9 @@ export function ModelDownloadModal({ open, onClose }: Props) {
                   />
                   <div
                     className={`h-4 w-4 shrink-0 rounded-full border-2 transition-colors ${
-                      selectedQuant === model.quantization ? "border-purple-400 bg-purple-400" : "border-[var(--border)]"
+                      selectedQuant === model.quantization
+                        ? "border-purple-400 bg-purple-400"
+                        : "border-[var(--border)]"
                     }`}
                   >
                     {selectedQuant === model.quantization && (
@@ -324,7 +323,11 @@ export function ModelDownloadModal({ open, onClose }: Props) {
                     disabled={!repoInput.trim() || customModelsLoading}
                     className="flex items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-4 py-2 text-sm text-[var(--foreground)] transition-colors hover:bg-[var(--secondary)] disabled:opacity-50"
                   >
-                    {customModelsLoading ? <Loader2 size="0.875rem" className="animate-spin" /> : <Search size="0.875rem" />}
+                    {customModelsLoading ? (
+                      <Loader2 size="0.875rem" className="animate-spin" />
+                    ) : (
+                      <Search size="0.875rem" />
+                    )}
                     List Models
                   </button>
                 </div>

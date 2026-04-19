@@ -204,7 +204,9 @@ class SidecarRuntimeService {
     writeFileSync(CURRENT_RUNTIME_PATH, JSON.stringify(record, null, 2), "utf-8");
   }
 
-  private async installLatest(onProgress?: (progress: SidecarDownloadProgress) => void): Promise<SidecarRuntimeInstall> {
+  private async installLatest(
+    onProgress?: (progress: SidecarDownloadProgress) => void,
+  ): Promise<SidecarRuntimeInstall> {
     const abortController = new AbortController();
     this.installAbort = abortController;
 
@@ -230,7 +232,9 @@ class SidecarRuntimeService {
 
       const match = await this.selectBestAsset(release.assets);
       if (!match) {
-        throw new Error(`Your platform (${process.platform}/${process.arch}) is not supported for local inference yet.`);
+        throw new Error(
+          `Your platform (${process.platform}/${process.arch}) is not supported for local inference yet.`,
+        );
       }
 
       const directoryName = `${release.tag_name}-${match.variant}`;

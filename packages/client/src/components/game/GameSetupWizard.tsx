@@ -36,6 +36,16 @@ interface GameSetupWizardProps {
   characters: Array<{ id: string; name: string; avatarUrl?: string | null }>;
 }
 
+interface PersonaDisplayInfo {
+  name: string;
+  comment?: string | null;
+}
+
+function getPersonaTitle(persona: PersonaDisplayInfo): string | null {
+  const title = persona.comment?.trim();
+  return title ? title : null;
+}
+
 const GENRES = ["Fantasy", "Sci-Fi", "Horror", "Modern", "Post-Apocalyptic", "Cyberpunk", "Steampunk", "Historical"];
 const TONES = ["Heroic", "Dark", "Comedic", "Gritty", "Whimsical", "Serious", "Campy"];
 const DIFFICULTIES = ["Casual", "Normal", "Hard", "Brutal"];
@@ -136,7 +146,12 @@ export function GameSetupWizard({ onComplete, onCancel, isLoading, characters }:
   }, []);
 
   const filteredPersonas = useMemo(
-    () => personas.filter((p) => p.name.toLowerCase().includes(personaSearch.toLowerCase())),
+    () =>
+      personas.filter((p) => {
+        const query = personaSearch.toLowerCase();
+        const title = getPersonaTitle(p)?.toLowerCase() ?? "";
+        return p.name.toLowerCase().includes(query) || title.includes(query);
+      }),
     [personas, personaSearch],
   );
 
@@ -709,6 +724,7 @@ export function GameSetupWizard({ onComplete, onCancel, isLoading, characters }:
                 (() => {
                   const p = personas.find((x) => x.id === personaId);
                   if (!p) return null;
+                  const title = getPersonaTitle(p);
                   return (
                     <div className="mb-2 flex items-center gap-2.5 rounded-lg bg-[var(--primary)]/10 px-3 py-2 ring-1 ring-[var(--primary)]/30">
                       {p.avatarPath ? (
@@ -723,7 +739,12 @@ export function GameSetupWizard({ onComplete, onCancel, isLoading, characters }:
                           {p.name[0]}
                         </div>
                       )}
-                      <span className="flex-1 truncate text-xs">{p.name}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="block truncate text-xs">{p.name}</span>
+                        {title && (
+                          <span className="block truncate text-[0.625rem] text-[var(--muted-foreground)]">{title}</span>
+                        )}
+                      </div>
                       <button
                         onClick={() => setPersonaId(null)}
                         className="flex h-5 w-5 items-center justify-center rounded-md text-[var(--muted-foreground)] transition-colors hover:bg-[var(--destructive)]/15 hover:text-[var(--destructive)]"
@@ -740,43 +761,46 @@ export function GameSetupWizard({ onComplete, onCancel, isLoading, characters }:
                   <input
                     value={personaSearch}
                     onChange={(e) => setPersonaSearch(e.target.value)}
-                    placeholder="Search personas…"
+                    placeholder="Search personas or titles…"
                     className="flex-1 bg-transparent text-xs outline-none placeholder:text-[var(--muted-foreground)]"
                   />
                 </div>
                 <div className="max-h-28 overflow-y-auto">
-                  {filteredPersonas.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => setPersonaId(p.id === personaId ? null : p.id)}
-                      className={cn(
-                        "flex w-full items-center gap-2.5 px-3 py-2 text-left transition-all hover:bg-[var(--accent)]",
-                        p.id === personaId && "bg-[var(--primary)]/5",
-                      )}
-                    >
-                      {p.avatarPath ? (
-                        <img
-                          src={p.avatarPath}
-                          alt={p.name}
-                          loading="lazy"
-                          className="h-6 w-6 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[0.5625rem] font-bold">
-                          {p.name[0]}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <span className="block truncate text-xs">{p.name}</span>
-                        {p.comment && (
-                          <span className="block truncate text-[0.625rem] text-[var(--muted-foreground)]">
-                            {p.comment}
-                          </span>
+                  {filteredPersonas.map((p) => {
+                    const title = getPersonaTitle(p);
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => setPersonaId(p.id === personaId ? null : p.id)}
+                        className={cn(
+                          "flex w-full items-center gap-2.5 px-3 py-2 text-left transition-all hover:bg-[var(--accent)]",
+                          p.id === personaId && "bg-[var(--primary)]/5",
                         )}
-                      </div>
-                      {p.id === personaId && <span className="text-[0.625rem] text-[var(--primary)]">Selected</span>}
-                    </button>
-                  ))}
+                      >
+                        {p.avatarPath ? (
+                          <img
+                            src={p.avatarPath}
+                            alt={p.name}
+                            loading="lazy"
+                            className="h-6 w-6 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[0.5625rem] font-bold">
+                            {p.name[0]}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <span className="block truncate text-xs">{p.name}</span>
+                          {title && (
+                            <span className="block truncate text-[0.625rem] text-[var(--muted-foreground)]">
+                              {title}
+                            </span>
+                          )}
+                        </div>
+                        {p.id === personaId && <span className="text-[0.625rem] text-[var(--primary)]">Selected</span>}
+                      </button>
+                    );
+                  })}
                   {filteredPersonas.length === 0 && (
                     <p className="px-3 py-2 text-[0.6875rem] text-[var(--muted-foreground)]">
                       {personas.length === 0 ? "No personas found. Create one in the Personas panel." : "No matches."}

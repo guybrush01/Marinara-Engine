@@ -241,7 +241,16 @@ const SCENE_ANALYSIS_SCHEMA = {
     },
   },
   additionalProperties: false as const,
-  required: ["background", "music", "ambient", "weather", "timeOfDay", "reputationChanges", "widgetUpdates", "segmentEffects"] as const,
+  required: [
+    "background",
+    "music",
+    "ambient",
+    "weather",
+    "timeOfDay",
+    "reputationChanges",
+    "widgetUpdates",
+    "segmentEffects",
+  ] as const,
 };
 
 export async function analyzeScene(systemPrompt: string, userPrompt: string): Promise<SceneAnalysis> {

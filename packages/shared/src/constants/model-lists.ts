@@ -478,6 +478,21 @@ const IMAGE_GEN_MODELS: KnownModel[] = [
 export function inferImageSource(model: string, baseUrl: string): string {
   const m = model.toLowerCase();
   const u = baseUrl.toLowerCase();
+  if (
+    m === "openai" ||
+    m === "stability" ||
+    m === "togetherai" ||
+    m === "novelai" ||
+    m === "pollinations" ||
+    m === "horde" ||
+    m === "blockentropy" ||
+    m === "comfyui" ||
+    m === "automatic1111" ||
+    m === "gemini_image"
+  ) {
+    return m;
+  }
+  if (m === "drawthings") return "automatic1111";
   if (m.startsWith("dall-e") || m.startsWith("gpt-image") || u.includes("openai.com")) return "openai";
   if (m.startsWith("sd3") || u.includes("stability.ai")) return "stability";
   if (m.includes("nai-diffusion") || u.includes("novelai.net")) return "novelai";

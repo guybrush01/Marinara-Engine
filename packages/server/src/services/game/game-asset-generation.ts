@@ -32,10 +32,11 @@ export interface NpcPortraitRequest {
   /** Unified art style prompt for visual consistency. */
   artStyle?: string;
   /** Connection credentials — already resolved & decrypted. */
+  imgSource?: string | null;
   imgModel: string;
   imgBaseUrl: string;
   imgApiKey: string;
-  imgService: string;
+  imgService?: string | null;
 }
 
 /**
@@ -61,12 +62,18 @@ export async function generateNpcPortrait(req: NpcPortraitRequest): Promise<stri
     );
 
   try {
-    const result = await generateImage(req.imgModel, req.imgBaseUrl, req.imgApiKey, req.imgService, {
-      prompt,
-      model: req.imgModel,
-      width: 512,
-      height: 512,
-    });
+    const result = await generateImage(
+      req.imgModel,
+      req.imgBaseUrl,
+      req.imgApiKey,
+      req.imgSource || req.imgService || "",
+      {
+        prompt,
+        model: req.imgModel,
+        width: 512,
+        height: 512,
+      },
+    );
 
     if (!existsSync(avatarDir)) mkdirSync(avatarDir, { recursive: true });
     writeFileSync(avatarPath, Buffer.from(result.base64, "base64"));
@@ -103,10 +110,11 @@ export interface BackgroundGenRequest {
   /** Unified art style prompt for visual consistency. */
   artStyle?: string;
   /** Connection credentials. */
+  imgSource?: string | null;
   imgModel: string;
   imgBaseUrl: string;
   imgApiKey: string;
-  imgService: string;
+  imgService?: string | null;
 }
 
 /**
@@ -138,12 +146,18 @@ export async function generateBackground(req: BackgroundGenRequest): Promise<str
     );
 
   try {
-    const result = await generateImage(req.imgModel, req.imgBaseUrl, req.imgApiKey, req.imgService, {
-      prompt,
-      model: req.imgModel,
-      width: 1024,
-      height: 576,
-    });
+    const result = await generateImage(
+      req.imgModel,
+      req.imgBaseUrl,
+      req.imgApiKey,
+      req.imgSource || req.imgService || "",
+      {
+        prompt,
+        model: req.imgModel,
+        width: 1024,
+        height: 576,
+      },
+    );
 
     if (!existsSync(targetDir)) mkdirSync(targetDir, { recursive: true });
     writeFileSync(targetPath, Buffer.from(result.base64, "base64"));

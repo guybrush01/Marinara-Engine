@@ -163,6 +163,12 @@ export class OpenAIProvider extends BaseLLMProvider {
   }
 
   async *chat(messages: ChatMessage[], options: ChatOptions): AsyncGenerator<string, LLMUsage | void, unknown> {
+    const configuredMaxTokens = options.maxTokens ?? 4096;
+    const contextFit = this.fitMessagesToContext(messages, { ...options, maxTokens: configuredMaxTokens });
+    messages = contextFit.messages;
+    this.logContextTrim(contextFit, options.model);
+    const maxTokens = contextFit.maxTokens ?? configuredMaxTokens;
+
     // Route to Responses API for models that require it
     if (this.useResponsesAPI(options.model)) {
       console.log(
@@ -170,7 +176,7 @@ export class OpenAIProvider extends BaseLLMProvider {
         options.model,
         options.stream ?? true,
       );
-      return yield* this.chatResponses(messages, options);
+      return yield* this.chatResponses(messages, { ...options, maxTokens });
     }
 
     const url = `${this.baseUrl}/chat/completions`;
@@ -183,10 +189,7 @@ export class OpenAIProvider extends BaseLLMProvider {
       formatted.push({ role: "user", content: "Continue." });
     }
 
-    // GPT-5.x reasoning models on Chat Completions always return SSE regardless
-    // of stream:false, so force streaming for them to avoid JSON parse failures.
-    const forceStream = reasoning && options.model.toLowerCase().startsWith("gpt-5");
-    const effectiveStream = forceStream || (options.stream ?? true);
+    const effectiveStream = options.stream ?? true;
 
     const body: Record<string, unknown> = {
       model: options.model,
@@ -199,9 +202,9 @@ export class OpenAIProvider extends BaseLLMProvider {
 
     if (reasoning) {
       // Reasoning models use max_completion_tokens instead of max_tokens
-      body.max_completion_tokens = options.maxTokens ?? 4096;
+      body.max_completion_tokens = maxTokens;
     } else {
-      body.max_tokens = options.maxTokens ?? 4096;
+      body.max_tokens = maxTokens;
     }
 
     // o-series models never support temperature/topP; GPT-5.x only with effort=none
@@ -228,8 +231,9 @@ export class OpenAIProvider extends BaseLLMProvider {
     }
 
     // OpenRouter provider routing preference
-    if (options.openrouterProvider && this.baseUrl.includes("openrouter.ai")) {
-      body.provider = { order: [options.openrouterProvider] };
+    const openrouterProvider = this.resolveOpenrouterProvider(options.openrouterProvider);
+    if (openrouterProvider && this.baseUrl.includes("openrouter.ai")) {
+      body.provider = { order: [openrouterProvider] };
     }
 
     // Force response format (e.g. JSON mode)
@@ -355,6 +359,12 @@ export class OpenAIProvider extends BaseLLMProvider {
 
   /** Non-streaming completion with tool-call support */
   async chatComplete(messages: ChatMessage[], options: ChatOptions): Promise<ChatCompletionResult> {
+    const configuredMaxTokens = options.maxTokens ?? 4096;
+    const contextFit = this.fitMessagesToContext(messages, { ...options, maxTokens: configuredMaxTokens });
+    messages = contextFit.messages;
+    this.logContextTrim(contextFit, options.model);
+    const maxTokens = contextFit.maxTokens ?? configuredMaxTokens;
+
     // Route to Responses API for models that require it
     if (this.useResponsesAPI(options.model)) {
       console.log(
@@ -362,17 +372,13 @@ export class OpenAIProvider extends BaseLLMProvider {
         options.model,
         !!options.onToken,
       );
-      return this.chatCompleteResponses(messages, options);
+      return this.chatCompleteResponses(messages, { ...options, maxTokens });
     }
 
     const url = `${this.baseUrl}/chat/completions`;
     const reasoning = this.isReasoningModel(options.model);
 
-    // Use streaming when an onToken callback is provided, so text arrives in real time.
-    // GPT-5.x reasoning models on Chat Completions always return SSE regardless of
-    // stream:false, so force streaming for them to avoid JSON parse failures.
-    const forceStream = reasoning && options.model.toLowerCase().startsWith("gpt-5");
-    const useStream = !!options.onToken || forceStream;
+    const useStream = options.stream ?? !!options.onToken;
 
     const formatted = this.formatMessages(messages, options.model);
     if (!formatted.some((m) => m.role !== "system" && m.role !== "developer")) {
@@ -389,9 +395,9 @@ export class OpenAIProvider extends BaseLLMProvider {
     };
 
     if (reasoning) {
-      body.max_completion_tokens = options.maxTokens ?? 4096;
+      body.max_completion_tokens = maxTokens;
     } else {
-      body.max_tokens = options.maxTokens ?? 4096;
+      body.max_tokens = maxTokens;
     }
 
     // o-series models never support temperature/topP; GPT-5.x only with effort=none
@@ -414,8 +420,9 @@ export class OpenAIProvider extends BaseLLMProvider {
     }
 
     // OpenRouter provider routing preference
-    if (options.openrouterProvider && this.baseUrl.includes("openrouter.ai")) {
-      body.provider = { order: [options.openrouterProvider] };
+    const openrouterProvider = this.resolveOpenrouterProvider(options.openrouterProvider);
+    if (openrouterProvider && this.baseUrl.includes("openrouter.ai")) {
+      body.provider = { order: [openrouterProvider] };
     }
 
     // Force response format (e.g. JSON mode)
@@ -777,6 +784,11 @@ export class OpenAIProvider extends BaseLLMProvider {
       body.text = { verbosity: options.verbosity };
     }
 
+    const openrouterProvider = this.resolveOpenrouterProvider(options.openrouterProvider);
+    if (openrouterProvider && this.baseUrl.includes("openrouter.ai")) {
+      body.provider = { order: [openrouterProvider] };
+    }
+
     if (options.tools?.length) {
       body.tools = this.formatResponsesTools(options.tools);
     }
@@ -938,7 +950,7 @@ export class OpenAIProvider extends BaseLLMProvider {
    */
   private async chatCompleteResponses(messages: ChatMessage[], options: ChatOptions): Promise<ChatCompletionResult> {
     const url = `${this.baseUrl}/responses`;
-    const useStream = !!options.onToken;
+    const useStream = options.stream ?? !!options.onToken;
     const body = this.buildResponsesBody(messages, { ...options, stream: useStream });
     console.log(
       "[OpenAI chatCompleteResponses] reasoning=%j onThinking=%s",

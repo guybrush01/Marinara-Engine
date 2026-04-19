@@ -75,7 +75,7 @@
 
 ## Latest Release
 
-Current stable release: **[v1.5.1](https://github.com/Pasta-Devs/Marinara-Engine/releases/tag/v1.5.1)**.
+Current stable release: **[v1.5.2](https://github.com/Pasta-Devs/Marinara-Engine/releases/tag/v1.5.2)**.
 
 Detailed release notes now live in [CHANGELOG.md](CHANGELOG.md). Tagged releases use the `vX.Y.Z` format, and GitHub Releases remain the publication mechanism for installers, release notes, and update metadata.
 
@@ -99,33 +99,33 @@ Detailed release notes now live in [CHANGELOG.md](CHANGELOG.md). Tagged releases
 
 ### Windows Easiest Method
 
-Download **[Marinara-Engine-Installer-1.5.1.exe](https://github.com/Pasta-Devs/Marinara-Engine/releases/download/v1.5.1/Marinara-Engine-Installer-1.5.1.exe)** from the [Releases](https://github.com/Pasta-Devs/Marinara-Engine/releases) page and run it. The installer checks for Node.js and Git, clones the repo, installs dependencies, builds the app, and creates a desktop shortcut.
+Download **[Marinara-Engine-Installer-1.5.2.exe](https://github.com/Pasta-Devs/Marinara-Engine/releases/download/v1.5.2/Marinara-Engine-Installer-1.5.2.exe)** from the [Releases](https://github.com/Pasta-Devs/Marinara-Engine/releases) page and run it. The installer lets you choose the install folder, checks for Node.js and Git, aligns pnpm to the repo-pinned version even if an older global pnpm is already installed, clones the repo, installs dependencies, builds the app, and creates desktop and Start Menu shortcuts with the Marinara icon.
 
 ### Run from Source (All Platforms)
 
 #### Prerequisites
 
-You need **Node.js** and **Git** installed before running Marinara Engine. pnpm is handled automatically by the shell launchers, or you can install it yourself for manual setup.
+You need **Node.js** and **Git** installed before running Marinara Engine. pnpm is handled automatically by the shell launchers, which align to the repo-pinned version even if a different global pnpm is already installed, or you can install it yourself for manual setup.
 
 **Install Node.js v20+:**
 
-| Platform | How to Install |
-| --- | --- |
-| Windows | Download the installer from [nodejs.org](https://nodejs.org/en/download) and run it |
-| macOS | `brew install node` or download from [nodejs.org](https://nodejs.org/en/download) |
+| Platform              | How to Install                                                                                  |
+| --------------------- | ----------------------------------------------------------------------------------------------- |
+| Windows               | Download the installer from [nodejs.org](https://nodejs.org/en/download) and run it             |
+| macOS                 | `brew install node` or download from [nodejs.org](https://nodejs.org/en/download)               |
 | Linux (Ubuntu/Debian) | `curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo bash - && sudo apt install -y nodejs` |
-| Linux (Fedora) | `sudo dnf install -y nodejs` |
-| Linux (Arch) | `sudo pacman -S nodejs npm` |
+| Linux (Fedora)        | `sudo dnf install -y nodejs`                                                                    |
+| Linux (Arch)          | `sudo pacman -S nodejs npm`                                                                     |
 
 **Install Git:**
 
-| Platform | How to Install |
-| --- | --- |
-| Windows | Download from [git-scm.com](https://git-scm.com/download/win) and run the installer |
-| macOS | `brew install git` or install Xcode Command Line Tools: `xcode-select --install` |
-| Linux (Ubuntu/Debian) | `sudo apt install -y git` |
-| Linux (Fedora) | `sudo dnf install -y git` |
-| Linux (Arch) | `sudo pacman -S git` |
+| Platform              | How to Install                                                                      |
+| --------------------- | ----------------------------------------------------------------------------------- |
+| Windows               | Download from [git-scm.com](https://git-scm.com/download/win) and run the installer |
+| macOS                 | `brew install git` or install Xcode Command Line Tools: `xcode-select --install`    |
+| Linux (Ubuntu/Debian) | `sudo apt install -y git`                                                           |
+| Linux (Fedora)        | `sudo dnf install -y git`                                                           |
+| Linux (Arch)          | `sudo pacman -S git`                                                                |
 
 Verify both are installed:
 
@@ -235,6 +235,7 @@ Podman is a drop-in replacement for Docker with better security features. Rootle
 ```bash
 podman compose up -d
 ```
+
 Or:
 
 ```bash
@@ -296,6 +297,7 @@ If you started the app with bare `pnpm start`, set `HOST=0.0.0.0` first or use o
    ```
 
    Example: `http://192.168.1.42:7860`
+
 3. **Install the PWA** from your browser for a more native app experience.
 
 > **Tip:** If you're not on the same network, tools like [Tailscale](https://tailscale.com/) give each device a stable IP address on a private network.
@@ -352,33 +354,33 @@ Contributor workflow, validation, and release/version policy live in [CONTRIBUTI
 
 Agents are autonomous AI assistants that run alongside your chat, each handling a specific task:
 
-| Agent | What It Does |
-| --- | --- |
-| **World State** | Tracks date, time, weather, location, and present characters |
-| **Quest Tracker** | Manages quest objectives, completion, and rewards |
-| **Character Tracker** | Monitors character moods, relationships, appearance, outfit, and stats |
-| **Persona Stats** | Tracks your protagonist's needs and condition bars |
-| **Custom Tracker** | Tracks user-defined fields such as currencies, counters, and flags |
-| **Narrative Director** | Introduces events, NPCs, and plot beats to keep the story moving |
-| **Prose Guardian** | Analyzes writing patterns and generates directives to improve prose variety |
-| **Continuity Checker** | Detects contradictions with established lore and facts |
-| **Combat** | Handles turn-based RPG combat with initiative, HP tracking, and actions |
-| **Expression Engine** | Detects emotions and selects character sprites |
-| **Background** | Picks the best background image for the current scene |
-| **Echo Chamber** | Simulates a live-stream chat reacting to your roleplay |
-| **Prompt Reviewer** | Reviews and scores the assembled prompt before generation |
-| **Illustrator** | Generates image prompts for key scenes |
-| **Lorebook Keeper** | Automatically creates and updates lorebook entries |
-| **Immersive HTML** | Injects styled HTML, CSS, and JS for in-world visuals |
-| **Consistency Editor** | Edits responses to fix factual errors and tracker contradictions |
-| **Spotify DJ** | Controls Spotify playback to match the scene's mood |
-| **Chat Summary** | Generates condensed rolling summaries of long conversations |
-| **Knowledge Retrieval** | Scans lorebooks for relevant context using chunked RAG |
-| **Schedule Planner** | Generates realistic weekly schedules for characters in Conversation mode |
+| Agent                     | What It Does                                                                |
+| ------------------------- | --------------------------------------------------------------------------- |
+| **World State**           | Tracks date, time, weather, location, and present characters                |
+| **Quest Tracker**         | Manages quest objectives, completion, and rewards                           |
+| **Character Tracker**     | Monitors character moods, relationships, appearance, outfit, and stats      |
+| **Persona Stats**         | Tracks your protagonist's needs and condition bars                          |
+| **Custom Tracker**        | Tracks user-defined fields such as currencies, counters, and flags          |
+| **Narrative Director**    | Introduces events, NPCs, and plot beats to keep the story moving            |
+| **Prose Guardian**        | Analyzes writing patterns and generates directives to improve prose variety |
+| **Continuity Checker**    | Detects contradictions with established lore and facts                      |
+| **Combat**                | Handles turn-based RPG combat with initiative, HP tracking, and actions     |
+| **Expression Engine**     | Detects emotions and selects character sprites                              |
+| **Background**            | Picks the best background image for the current scene                       |
+| **Echo Chamber**          | Simulates a live-stream chat reacting to your roleplay                      |
+| **Prompt Reviewer**       | Reviews and scores the assembled prompt before generation                   |
+| **Illustrator**           | Generates image prompts for key scenes                                      |
+| **Lorebook Keeper**       | Automatically creates and updates lorebook entries                          |
+| **Immersive HTML**        | Injects styled HTML, CSS, and JS for in-world visuals                       |
+| **Consistency Editor**    | Edits responses to fix factual errors and tracker contradictions            |
+| **Spotify DJ**            | Controls Spotify playback to match the scene's mood                         |
+| **Chat Summary**          | Generates condensed rolling summaries of long conversations                 |
+| **Knowledge Retrieval**   | Scans lorebooks for relevant context using chunked RAG                      |
+| **Schedule Planner**      | Generates realistic weekly schedules for characters in Conversation mode    |
 | **Response Orchestrator** | Decides which character or characters should respond in group conversations |
-| **Love Toys Control** | Controls Buttplug.io haptic devices with per-device capability awareness |
-| **CYOA Choices** | Generates 2 to 4 in-character choices after each response |
-| **Autonomous Messenger** | Allows characters to send messages unprompted when the user is inactive |
+| **Love Toys Control**     | Controls Buttplug.io haptic devices with per-device capability awareness    |
+| **CYOA Choices**          | Generates 2 to 4 in-character choices after each response                   |
+| **Autonomous Messenger**  | Allows characters to send messages unprompted when the user is inactive     |
 
 All agents are disabled by default. Enable only the ones you want, or create custom agents with your own prompts and tool configurations.
 
@@ -412,20 +414,20 @@ All agents are disabled by default. Enable only the ones you want, or create cus
 
 Copy `.env.example` to `.env` to customize:
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `PORT` | `7860` | Server port. Keep Android builds, launchers, Docker, and Termux on the same value. |
-| `HOST` | `127.0.0.1` (`pnpm start`) / `0.0.0.0` (shell launchers) | Bind address |
-| `AUTO_OPEN_BROWSER` | `true` | Whether the shell launchers auto-open the local app URL. Set to `false`, `0`, `no`, or `off` to disable. Does not apply to the Android WebView wrapper. |
-| `DATABASE_URL` | `file:./data/marinara-engine.db` | SQLite database path. Relative file paths resolve from `packages/server` for compatibility with existing local installs. |
-| `ENCRYPTION_KEY` | _(empty)_ | AES key for API key encryption (generate with `openssl rand -hex 32`) |
-| `ADMIN_SECRET` | _(empty)_ | Optional shared secret for destructive admin endpoints such as `/api/admin/clear-all` |
-| `LOG_LEVEL` | `info` | Logging verbosity |
-| `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Allowed CORS origins. Set `*` for allow-all without credentials; explicit origin lists keep credentialed CORS support. |
-| `SSL_CERT` | _(empty)_ | Path to the TLS certificate. Set both `SSL_CERT` and `SSL_KEY` to enable HTTPS. |
-| `SSL_KEY` | _(empty)_ | Path to the TLS private key |
-| `IP_ALLOWLIST` | _(empty)_ | Comma-separated IPs or CIDRs to allow. Loopback is always allowed. |
-| `GIPHY_API_KEY` | _(empty)_ | Optional Giphy API key. GIF search is unavailable when unset. |
+| Variable            | Default                                                  | Description                                                                                                                                             |
+| ------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`              | `7860`                                                   | Server port. Keep Android builds, launchers, Docker, and Termux on the same value.                                                                      |
+| `HOST`              | `127.0.0.1` (`pnpm start`) / `0.0.0.0` (shell launchers) | Bind address                                                                                                                                            |
+| `AUTO_OPEN_BROWSER` | `true`                                                   | Whether the shell launchers auto-open the local app URL. Set to `false`, `0`, `no`, or `off` to disable. Does not apply to the Android WebView wrapper. |
+| `DATABASE_URL`      | `file:./data/marinara-engine.db`                         | SQLite database path. Relative file paths resolve from `packages/server` for compatibility with existing local installs.                                |
+| `ENCRYPTION_KEY`    | _(empty)_                                                | AES key for API key encryption (generate with `openssl rand -hex 32`)                                                                                   |
+| `ADMIN_SECRET`      | _(empty)_                                                | Optional shared secret for destructive admin endpoints such as `/api/admin/clear-all`                                                                   |
+| `LOG_LEVEL`         | `info`                                                   | Logging verbosity                                                                                                                                       |
+| `CORS_ORIGINS`      | `http://localhost:5173,http://127.0.0.1:5173`            | Allowed CORS origins. Set `*` for allow-all without credentials; explicit origin lists keep credentialed CORS support.                                  |
+| `SSL_CERT`          | _(empty)_                                                | Path to the TLS certificate. Set both `SSL_CERT` and `SSL_KEY` to enable HTTPS.                                                                         |
+| `SSL_KEY`           | _(empty)_                                                | Path to the TLS private key                                                                                                                             |
+| `IP_ALLOWLIST`      | _(empty)_                                                | Comma-separated IPs or CIDRs to allow. Loopback is always allowed.                                                                                      |
+| `GIPHY_API_KEY`     | _(empty)_                                                | Optional Giphy API key. GIF search is unavailable when unset.                                                                                           |
 
 ---
 
@@ -448,13 +450,13 @@ marinara-engine/
 
 ## Tech Stack
 
-| Layer | Technology |
-| --- | --- |
+| Layer    | Technology                                                     |
+| -------- | -------------------------------------------------------------- |
 | Frontend | React 19, Tailwind CSS v4, Framer Motion, Zustand, React Query |
-| Backend | Fastify 5, Drizzle ORM, SQLite |
-| PWA | vite-plugin-pwa, Web App Manifest |
-| Shared | TypeScript 5, Zod |
-| Build | Vite 6, pnpm workspaces |
+| Backend  | Fastify 5, Drizzle ORM, SQLite                                 |
+| PWA      | vite-plugin-pwa, Web App Manifest                              |
+| Shared   | TypeScript 5, Zod                                              |
+| Build    | Vite 6, pnpm workspaces                                        |
 
 ---
 

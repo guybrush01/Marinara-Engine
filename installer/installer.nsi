@@ -11,11 +11,12 @@
 
 ; ── App metadata ──
 !define APP_NAME "Marinara Engine"
-!define APP_VERSION "1.5.1"
+!define APP_VERSION "1.5.2"
 !define APP_PUBLISHER "Pasta-Devs"
 !define APP_URL "https://github.com/Pasta-Devs/Marinara-Engine"
 !define REPO_URL "https://github.com/Pasta-Devs/Marinara-Engine.git"
 !define DEFAULT_DIR "$LOCALAPPDATA\MarinaraEngine"
+!define PNPM_VERSION "10.30.3"
 
 ; ── Prerequisite download URLs ──
 ; Pin to known-good versions so the installer is deterministic and doesn't
@@ -51,6 +52,7 @@ BrandingText "${APP_NAME} v${APP_VERSION} — AI Chat & Roleplay Engine"
 ${APP_NAME} is a local AI chat and roleplay engine that runs entirely on your machine.$\r$\n$\r$\n\
 This installer will:$\r$\n\
   - Check for Node.js and Git (and help you install them)$\r$\n\
+  - Align pnpm to the repo-pinned version so older global installs do not break setup$\r$\n\
   - Download the latest ${APP_NAME} files$\r$\n\
   - Install dependencies and build the app$\r$\n\
   - Create shortcuts so you can launch it anytime$\r$\n$\r$\n\
@@ -93,9 +95,26 @@ Future updates: Open Settings in the app and click $\"Check for Updates$\"."
 Var GIT_OK
 Var NODE_OK
 Var PNPM_OK
+Var COREPACK_OK
 
 Function LaunchApp
   ExecShell "" "$INSTDIR\start.bat"
+FunctionEnd
+
+Function CreateAppShortcut
+  Exch $0
+  FileOpen $1 "$TEMP\me-create-shortcut.vbs" w
+  FileWrite $1 'Set oWS = WScript.CreateObject("WScript.Shell")$\r$\n'
+  FileWrite $1 'Set oLink = oWS.CreateShortcut("$0")$\r$\n'
+  FileWrite $1 'oLink.TargetPath = "$INSTDIR\start.bat"$\r$\n'
+  FileWrite $1 'oLink.WorkingDirectory = "$INSTDIR"$\r$\n'
+  FileWrite $1 'oLink.IconLocation = "$INSTDIR\app-icon.ico,0"$\r$\n'
+  FileWrite $1 'oLink.Description = "${APP_NAME} - AI Chat & Roleplay"$\r$\n'
+  FileWrite $1 'oLink.Save$\r$\n'
+  FileClose $1
+  nsExec::ExecToLog '"$SYSDIR\cscript.exe" //nologo "$TEMP\me-create-shortcut.vbs"'
+  Pop $1
+  Delete "$TEMP\me-create-shortcut.vbs"
 FunctionEnd
 
 ; ──────────────────────────────────────────────
@@ -197,23 +216,40 @@ Please restart your computer and run this installer again."
 
 
   ; ── Check for pnpm ──
-  DetailPrint "Looking for pnpm..."
-  nsExec::ExecToStack 'where pnpm'
-  Pop $PNPM_OK
+  DetailPrint "Ensuring pnpm ${PNPM_VERSION}..."
+  nsExec::ExecToStack 'where corepack'
+  Pop $COREPACK_OK
   Pop $1
-  ${If} $PNPM_OK != 0
-    DetailPrint "Installing pnpm..."
-    nsExec::ExecToLog 'npm install -g pnpm'
+  ${If} $COREPACK_OK == 0
+    DetailPrint "Using Corepack to activate pnpm ${PNPM_VERSION}..."
+    nsExec::ExecToLog 'cmd /c corepack enable'
+    Pop $0
+    nsExec::ExecToLog 'cmd /c corepack prepare pnpm@${PNPM_VERSION} --activate'
     Pop $0
     ${If} $0 != 0
-      DetailPrint "pnpm install via npm failed, trying corepack..."
-      nsExec::ExecToLog 'corepack enable'
-      Pop $0
-      nsExec::ExecToLog 'corepack prepare pnpm@latest --activate'
-      Pop $0
+      MessageBox MB_OK|MB_ICONSTOP "pnpm ${PNPM_VERSION} could not be prepared via Corepack.$\r$\n$\r$\nPlease install Node.js 20+ and run the installer again."
+      Abort
     ${EndIf}
+    nsExec::ExecToStack 'cmd /c corepack pnpm --version'
+    Pop $PNPM_OK
+    Pop $1
+  ${Else}
+    DetailPrint "Corepack not found — installing pnpm ${PNPM_VERSION} globally..."
+    nsExec::ExecToLog 'cmd /c npm install -g pnpm@${PNPM_VERSION}'
+    Pop $0
+    ${If} $0 != 0
+      MessageBox MB_OK|MB_ICONSTOP "pnpm ${PNPM_VERSION} could not be installed.$\r$\n$\r$\nPlease install pnpm ${PNPM_VERSION} manually or update Node.js to a build that includes Corepack."
+      Abort
+    ${EndIf}
+    nsExec::ExecToStack 'cmd /c pnpm --version'
+    Pop $PNPM_OK
+    Pop $1
   ${EndIf}
-  DetailPrint "pnpm ready."
+  ${If} $PNPM_OK != 0
+    MessageBox MB_OK|MB_ICONSTOP "pnpm ${PNPM_VERSION} is still unavailable after setup.$\r$\n$\r$\nPlease restart your computer and run the installer again."
+    Abort
+  ${EndIf}
+  DetailPrint "pnpm ${PNPM_VERSION} ready."
   DetailPrint "All prerequisites satisfied."
 
   ; ── Step 2: Download / update repository ──
@@ -265,8 +301,13 @@ ${APP_URL}"
   DetailPrint "═══ Step 3/6: Installing dependencies ═══"
   DetailPrint ""
   DetailPrint "Running pnpm install (this may take 2-5 minutes)..."
-  nsExec::ExecToLog 'pnpm install'
-  Pop $0
+  ${If} $COREPACK_OK == 0
+    nsExec::ExecToLog 'cmd /c corepack pnpm install'
+    Pop $0
+  ${Else}
+    nsExec::ExecToLog 'cmd /c pnpm install'
+    Pop $0
+  ${EndIf}
   ${If} $0 != 0
     DetailPrint "Warning: pnpm install reported issues."
     MessageBox MB_YESNO|MB_ICONEXCLAMATION "\
@@ -275,8 +316,13 @@ This sometimes happens due to network issues.$\r$\n\
 Would you like to retry?" IDYES retryInstall IDNO skipRetryInstall
     retryInstall:
       DetailPrint "Retrying pnpm install..."
-      nsExec::ExecToLog 'pnpm install'
-      Pop $0
+      ${If} $COREPACK_OK == 0
+        nsExec::ExecToLog 'cmd /c corepack pnpm install'
+        Pop $0
+      ${Else}
+        nsExec::ExecToLog 'cmd /c pnpm install'
+        Pop $0
+      ${EndIf}
     skipRetryInstall:
   ${EndIf}
   DetailPrint "Dependencies installed."
@@ -286,8 +332,13 @@ Would you like to retry?" IDYES retryInstall IDNO skipRetryInstall
   DetailPrint "═══ Step 4/6: Building the application ═══"
   DetailPrint ""
   DetailPrint "Building ${APP_NAME} (this may take 1-3 minutes)..."
-  nsExec::ExecToLog 'pnpm build'
-  Pop $0
+  ${If} $COREPACK_OK == 0
+    nsExec::ExecToLog 'cmd /c corepack pnpm build'
+    Pop $0
+  ${Else}
+    nsExec::ExecToLog 'cmd /c pnpm build'
+    Pop $0
+  ${EndIf}
   ${If} $0 != 0
     DetailPrint "Warning: Build reported issues. The app may still work."
   ${Else}
@@ -305,15 +356,14 @@ Would you like to retry?" IDYES retryInstall IDNO skipRetryInstall
 
   ; Desktop shortcut
   DetailPrint "Creating desktop shortcut..."
-  CreateShortCut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\start.bat" "" "$INSTDIR\app-icon.ico" 0
-  ; Set "Run minimized" so the cmd window starts minimized
-  ; ShortCut already created, now set to minimum window
   Push "$DESKTOP\${APP_NAME}.lnk"
+  Call CreateAppShortcut
 
   ; Start Menu folder
   DetailPrint "Creating Start Menu entries..."
   CreateDirectory "$SMPROGRAMS\${APP_NAME}"
-  CreateShortCut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "$INSTDIR\start.bat" "" "$INSTDIR\app-icon.ico" 0
+  Push "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"
+  Call CreateAppShortcut
   CreateShortCut "$SMPROGRAMS\${APP_NAME}\Uninstall ${APP_NAME}.lnk" "$INSTDIR\uninstall.exe" "" "$INSTDIR\app-icon.ico" 0
 
   ; ── Step 6: Uninstaller & registry ──

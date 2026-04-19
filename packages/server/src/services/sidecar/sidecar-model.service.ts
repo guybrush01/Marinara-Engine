@@ -191,7 +191,7 @@ class SidecarModelService {
   }
 
   isEnabled(): boolean {
-    return this.config.useForTrackers || this.config.useForGameScene;
+    return this.config.useForGameScene;
   }
 
   getModelFilePath(): string | null {
@@ -209,9 +209,7 @@ class SidecarModelService {
   }
 
   updateConfig(
-    partial: Partial<
-      Pick<SidecarConfig, "useForTrackers" | "useForGameScene" | "contextSize" | "gpuLayers">
-    >,
+    partial: Partial<Pick<SidecarConfig, "useForTrackers" | "useForGameScene" | "contextSize" | "gpuLayers">>,
   ): SidecarConfig {
     this.config = { ...this.config, ...partial };
     this.saveConfig();

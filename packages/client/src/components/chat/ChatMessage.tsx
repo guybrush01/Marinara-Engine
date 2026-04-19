@@ -448,6 +448,7 @@ export const ChatMessage = memo(function ChatMessage({
     chatFontSize,
     chatFontColor,
     chatFontOpacity,
+    roleplayAvatarStyle,
     textStrokeWidth,
     textStrokeColor,
     showModelName,
@@ -459,6 +460,7 @@ export const ChatMessage = memo(function ChatMessage({
       chatFontSize: s.chatFontSize,
       chatFontColor: s.chatFontColor,
       chatFontOpacity: s.chatFontOpacity,
+      roleplayAvatarStyle: s.roleplayAvatarStyle,
       textStrokeWidth: s.textStrokeWidth,
       textStrokeColor: s.textStrokeColor,
       showModelName: s.showModelName,
@@ -663,6 +665,7 @@ export const ChatMessage = memo(function ChatMessage({
   const dialogueColor = msgColors?.dialogueColor;
   const boxBgColor = msgColors?.boxColor;
   const msgNameColor = msgColors?.nameColor;
+  const roleplayBubbleBg = boxBgColor ? boxBgColor : isUser ? userBubbleBg : assistantBubbleBg;
 
   // Build speaker → dialogueColor map for group chat speaker tag coloring
   const speakerColorMap = useMemo(() => {
@@ -701,6 +704,7 @@ export const ChatMessage = memo(function ChatMessage({
   const cycleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mergedNameRef = useRef<HTMLSpanElement>(null);
   const mergedAvatarRefs = useRef<(HTMLImageElement | null)[]>([]);
+  const mergedAvatarTailRefs = useRef<(HTMLImageElement | null)[]>([]);
 
   useEffect(() => {
     if (!isMergedGroup) return;
@@ -711,6 +715,9 @@ export const ChatMessage = memo(function ChatMessage({
       const idx = cycleIndexRef.current;
       // Update avatar opacity via DOM directly (no re-render)
       mergedAvatarRefs.current.forEach((img, i) => {
+        if (img) img.style.opacity = i === idx ? "1" : "0";
+      });
+      mergedAvatarTailRefs.current.forEach((img, i) => {
         if (img) img.style.opacity = i === idx ? "1" : "0";
       });
       // Update name color opacity via DOM directly
@@ -792,6 +799,75 @@ export const ChatMessage = memo(function ChatMessage({
       onSetActiveSwipe?.(message.id, message.activeSwipeIndex + 1);
     }
   }, [message.id, message.activeSwipeIndex, swipeCount, onSetActiveSwipe]);
+
+  const showRoleplayAvatarPanel = isRoleplay && roleplayAvatarStyle === "panel" && !isGrouped;
+  const roleplayAvatarPanelTail = showRoleplayAvatarPanel ? (
+    isMergedGroup && mergedAvatars.length > 0 ? (
+      <div className="rpg-avatar-panel-tail absolute inset-0 pointer-events-none overflow-hidden">
+        {mergedAvatars.map((avatar, i) => (
+          <img
+            key={`tail-${avatar.url}`}
+            ref={(el) => {
+              mergedAvatarTailRefs.current[i] = el;
+            }}
+            src={avatar.url}
+            alt=""
+            aria-hidden="true"
+            className="rpg-avatar-panel-tail-image absolute inset-0 h-full w-full object-cover object-top transition-opacity duration-700"
+            style={{ opacity: i === 0 ? 1 : 0, ...getAvatarCropStyle(avatar.crop) }}
+          />
+        ))}
+      </div>
+    ) : avatarUrl ? (
+      <div className="rpg-avatar-panel-tail absolute inset-0 pointer-events-none overflow-hidden">
+        <img
+          src={avatarUrl}
+          alt=""
+          aria-hidden="true"
+          className="rpg-avatar-panel-tail-image absolute inset-0 h-full w-full object-cover object-top"
+          style={avatarCropStyle}
+        />
+      </div>
+    ) : null
+  ) : null;
+  const roleplayBubbleContent = editing ? (
+    <EditTextarea
+      initialContent={message.content}
+      fontSize={chatFontSize}
+      onSave={handleSaveEdit}
+      onCancel={handleCancelEdit}
+    />
+  ) : (
+    <>
+      <div className={cn("mari-message-content break-words", !isHtmlContent && "whitespace-pre-wrap")}>
+        {isStreaming && !message.content ? (
+          <div className="mari-message-typing flex items-center gap-1 py-0.5">
+            <span className="h-2 w-2 animate-bounce rounded-full bg-blue-400/60 [animation-delay:0ms]" />
+            <span className="h-2 w-2 animate-bounce rounded-full bg-blue-400/60 [animation-delay:150ms]" />
+            <span className="h-2 w-2 animate-bounce rounded-full bg-blue-400/60 [animation-delay:300ms]" />
+          </div>
+        ) : (
+          <>
+            {renderedContent}
+            {isStreaming && (
+              <span className="ml-0.5 inline-block h-4 w-[0.125rem] animate-pulse rounded-full bg-blue-400" />
+            )}
+          </>
+        )}
+      </div>
+      {(translatedText || isTranslating) && (
+        <div className="mt-2 border-t border-white/10 pt-2">
+          {isTranslating ? (
+            <span className="text-[0.75rem] italic text-white/40">Translating…</span>
+          ) : (
+            <div className="whitespace-pre-wrap text-[0.8125rem] leading-relaxed text-blue-200/70">
+              {translatedText}
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
 
   // ─── System messages (shared across modes) ───
   if (isSystem) {
@@ -899,7 +975,7 @@ export const ChatMessage = memo(function ChatMessage({
             </div>
           )}
           {/* Avatar Column */}
-          {!isGrouped && (
+          {!isGrouped && !showRoleplayAvatarPanel && (
             <div className="mari-message-avatar flex flex-col items-center flex-shrink-0 pt-1">
               {isMergedGroup && mergedAvatars.length > 0 ? (
                 <div
@@ -985,6 +1061,9 @@ export const ChatMessage = memo(function ChatMessage({
                     {genLabel}
                   </span>
                 )}
+                {showRoleplayAvatarPanel && (showActions || showMessageNumbers) && messageIndex != null && (
+                  <span className="text-[0.5625rem] font-medium text-white/25 select-none">#{messageIndex}</span>
+                )}
               </div>
             )}
 
@@ -1009,51 +1088,103 @@ export const ChatMessage = memo(function ChatMessage({
                 isGrouped && (isUser ? "rounded-tr-2xl" : "rounded-tl-2xl"),
                 isStreaming && "rpg-streaming",
                 isConversationStart && "ring-amber-400/30",
+                showRoleplayAvatarPanel && "px-0 py-0",
                 editing && "w-full",
               )}
               style={{
                 ...messageTextStyle,
-                backgroundColor: boxBgColor ? boxBgColor : isUser ? userBubbleBg : assistantBubbleBg,
+                backgroundColor: roleplayBubbleBg,
               }}
             >
-              {editing ? (
-                <EditTextarea
-                  initialContent={message.content}
-                  fontSize={chatFontSize}
-                  onSave={handleSaveEdit}
-                  onCancel={handleCancelEdit}
-                />
-              ) : (
-                <>
-                  <div className={cn("mari-message-content break-words", !isHtmlContent && "whitespace-pre-wrap")}>
-                    {isStreaming && !message.content ? (
-                      <div className="mari-message-typing flex items-center gap-1 py-0.5">
-                        <span className="h-2 w-2 animate-bounce rounded-full bg-blue-400/60 [animation-delay:0ms]" />
-                        <span className="h-2 w-2 animate-bounce rounded-full bg-blue-400/60 [animation-delay:150ms]" />
-                        <span className="h-2 w-2 animate-bounce rounded-full bg-blue-400/60 [animation-delay:300ms]" />
-                      </div>
-                    ) : (
-                      <>
-                        {renderedContent}
-                        {isStreaming && (
-                          <span className="ml-0.5 inline-block h-4 w-[0.125rem] animate-pulse rounded-full bg-blue-400" />
-                        )}
-                      </>
+              {showRoleplayAvatarPanel ? (
+                <div className={cn("flex min-h-full items-stretch", isUser && "flex-row-reverse")}>
+                  <div
+                    className={cn(
+                      "relative flex w-[4.75rem] shrink-0 items-start self-stretch overflow-hidden md:w-[5.25rem]",
+                      isUser ? "border-l border-white/8" : "border-r border-white/8",
                     )}
-                  </div>
-                  {/* Translation */}
-                  {(translatedText || isTranslating) && (
-                    <div className="mt-2 border-t border-white/10 pt-2">
-                      {isTranslating ? (
-                        <span className="text-[0.75rem] italic text-white/40">Translating…</span>
+                  >
+                    <div className="rpg-avatar-panel-stack relative h-full max-h-44 w-full overflow-hidden">
+                      {isMergedGroup && mergedAvatars.length > 0 ? (
+                        <button
+                          type="button"
+                          className="rpg-avatar-panel-media rpg-avatar-panel absolute inset-0 block h-full w-full cursor-zoom-in overflow-hidden"
+                          onClick={() => {
+                            const visible = mergedAvatars[cycleIndexRef.current];
+                            if (visible) setAvatarLightbox(visible.url);
+                          }}
+                          aria-label={`Open ${displayName} avatar`}
+                        >
+                          {mergedAvatars.map((avatar, i) => (
+                            <img
+                              key={avatar.url}
+                              ref={(el) => {
+                                mergedAvatarRefs.current[i] = el;
+                              }}
+                              src={avatar.url}
+                              alt="Group"
+                              className="absolute inset-0 h-full w-full object-cover object-top transition-opacity duration-700"
+                              style={{ opacity: i === 0 ? 1 : 0, ...getAvatarCropStyle(avatar.crop) }}
+                            />
+                          ))}
+                        </button>
+                      ) : avatarUrl ? (
+                        <button
+                          type="button"
+                          className={cn(
+                            "rpg-avatar-panel-media absolute inset-0 block h-full w-full cursor-zoom-in overflow-hidden",
+                            !isUser && "rpg-avatar-panel",
+                          )}
+                          onClick={() => setAvatarLightbox(avatarUrl)}
+                          aria-label={`Open ${displayName} avatar`}
+                        >
+                          <img
+                            src={avatarUrl}
+                            alt={displayName}
+                            className="h-full w-full object-cover object-top"
+                            style={avatarCropStyle}
+                          />
+                        </button>
                       ) : (
-                        <div className="whitespace-pre-wrap text-[0.8125rem] leading-relaxed text-blue-200/70">
-                          {translatedText}
+                        <div
+                          className={cn(
+                            "flex h-full w-full items-start justify-center pt-4",
+                            isUser
+                              ? "bg-gradient-to-b from-neutral-500/90 via-neutral-600/65 to-transparent"
+                              : "bg-gradient-to-b from-purple-500/90 via-pink-600/65 to-transparent",
+                          )}
+                        >
+                          {isUser ? (
+                            <User size="1.25rem" className="text-white" />
+                          ) : (
+                            <Bot size="1.25rem" className="text-white" />
+                          )}
                         </div>
                       )}
+                      {roleplayAvatarPanelTail}
+                      <div
+                        className="pointer-events-none absolute inset-x-0 bottom-0 h-[34%]"
+                        style={{
+                          background: `linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, ${roleplayBubbleBg} 100%)`,
+                          opacity: 0.92,
+                          maskImage:
+                            "linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.12) 22%, rgba(0, 0, 0, 0.66) 72%, rgba(0, 0, 0, 1) 100%)",
+                          WebkitMaskImage:
+                            "linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.12) 22%, rgba(0, 0, 0, 0.66) 72%, rgba(0, 0, 0, 1) 100%)",
+                        }}
+                      />
+                      <div
+                        className="pointer-events-none absolute inset-0"
+                        style={{
+                          background: `linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 74%, ${roleplayBubbleBg} 90%, ${roleplayBubbleBg} 100%)`,
+                        }}
+                      />
                     </div>
-                  )}
-                </>
+                  </div>
+                  <div className="min-w-0 flex-1 px-4 py-3">{roleplayBubbleContent}</div>
+                </div>
+              ) : (
+                <div className="px-4 py-3">{roleplayBubbleContent}</div>
               )}
             </div>
 

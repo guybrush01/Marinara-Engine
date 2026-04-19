@@ -22,6 +22,12 @@ interface GeminiPart {
  */
 export class GoogleProvider extends BaseLLMProvider {
   async *chat(messages: ChatMessage[], options: ChatOptions): AsyncGenerator<string, LLMUsage | void, unknown> {
+    const configuredMaxTokens = options.maxTokens ?? 4096;
+    const contextFit = this.fitMessagesToContext(messages, { ...options, maxTokens: configuredMaxTokens });
+    messages = contextFit.messages;
+    this.logContextTrim(contextFit, options.model || "gemini-2.0-flash");
+    const maxTokens = contextFit.maxTokens ?? configuredMaxTokens;
+
     const model = options.model || "gemini-2.0-flash";
 
     // Gemini 3.x models use thinkingLevel; Gemini 2.5 uses thinkingBudget
@@ -98,7 +104,7 @@ export class GoogleProvider extends BaseLLMProvider {
       contents,
       generationConfig: {
         temperature: options.temperature ?? 1,
-        maxOutputTokens: options.maxTokens ?? 4096,
+        maxOutputTokens: maxTokens,
         topP: options.topP ?? 1,
         ...(options.topK ? { topK: options.topK } : {}),
         ...(options.frequencyPenalty ? { frequencyPenalty: options.frequencyPenalty } : {}),

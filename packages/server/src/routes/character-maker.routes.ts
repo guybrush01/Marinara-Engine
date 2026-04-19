@@ -9,6 +9,7 @@ import { createLLMProvider } from "../services/llm/provider-registry.js";
 const characterMakerSchema = z.object({
   prompt: z.string().min(1),
   connectionId: z.string().min(1),
+  streaming: z.boolean().optional().default(true),
 });
 
 const SYSTEM_PROMPT = `You are a creative character designer for roleplay and fiction. Given a short description or concept, generate a complete character card in JSON format.
@@ -66,7 +67,7 @@ export async function characterMakerRoutes(app: FastifyInstance) {
     });
 
     try {
-      const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey);
+      const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey, conn.maxContext, conn.openrouterProvider);
       let fullResponse = "";
 
       for await (const chunk of provider.chat(
@@ -78,7 +79,7 @@ export async function characterMakerRoutes(app: FastifyInstance) {
           model: conn.model,
           temperature: 1,
           maxTokens: 8192,
-          stream: true,
+          stream: input.streaming,
         },
       )) {
         fullResponse += chunk;

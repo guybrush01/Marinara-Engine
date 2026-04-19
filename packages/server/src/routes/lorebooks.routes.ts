@@ -272,7 +272,13 @@ export async function lorebooksRoutes(app: FastifyInstance) {
     const embedBaseUrl = conn.embeddingBaseUrl
       ? (conn.embeddingBaseUrl as string).replace(/\/+$/, "")
       : (conn.baseUrl as string);
-    const provider = createLLMProvider(conn.provider as string, embedBaseUrl, conn.apiKey as string);
+    const provider = createLLMProvider(
+      conn.provider as string,
+      embedBaseUrl,
+      conn.apiKey as string,
+      conn.maxContext,
+      conn.openrouterProvider,
+    );
 
     // Build text for each entry: combine name, keys, and content
     const texts = (entries as Array<Record<string, unknown>>).map((e) => {

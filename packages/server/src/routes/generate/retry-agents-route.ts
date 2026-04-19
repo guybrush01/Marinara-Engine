@@ -1,8 +1,14 @@
 import type { FastifyInstance } from "fastify";
-import { BUILT_IN_AGENTS, type AgentContext, type AgentResult } from "@marinara-engine/shared";
+import {
+  BUILT_IN_AGENTS,
+  LOCAL_SIDECAR_CONNECTION_ID,
+  type AgentContext,
+  type AgentResult,
+} from "@marinara-engine/shared";
 import { eq } from "drizzle-orm";
 import type { ResolvedAgent } from "../../services/agents/agent-pipeline.js";
 import { executeAgentBatch } from "../../services/agents/agent-executor.js";
+import { getLocalSidecarProvider, LOCAL_SIDECAR_MODEL } from "../../services/llm/local-sidecar.js";
 import { createLLMProvider } from "../../services/llm/provider-registry.js";
 import { createAgentsStorage } from "../../services/storage/agents.storage.js";
 import { createCharactersStorage } from "../../services/storage/characters.storage.js";
@@ -10,9 +16,11 @@ import { createChatsStorage } from "../../services/storage/chats.storage.js";
 import { createConnectionsStorage } from "../../services/storage/connections.storage.js";
 import { createGameStateStorage } from "../../services/storage/game-state.storage.js";
 import { createLorebooksStorage } from "../../services/storage/lorebooks.storage.js";
+import { syncGameMapPartyPosition } from "../../services/game/map-position.service.js";
 import { gameStateSnapshots as gameStateSnapshotsTable } from "../../db/schema/index.js";
 import { parseExtra, parseGameStateRow, resolveBaseUrl } from "./generate-route-utils.js";
 import { sendSseEvent, startSseReply } from "./sse.js";
+import type { GameMap } from "@marinara-engine/shared";
 
 type PersonaContext = {
   personaName: string;
@@ -97,6 +105,7 @@ async function buildRetryAgentContext(args: {
   chars: ReturnType<typeof createCharactersStorage>;
   gameStateStore: ReturnType<typeof createGameStateStorage>;
   lorebooksStore: ReturnType<typeof createLorebooksStorage>;
+  streaming: boolean;
 }) {
   const {
     chatId,
@@ -108,6 +117,7 @@ async function buildRetryAgentContext(args: {
     chars,
     gameStateStore,
     lorebooksStore,
+    streaming,
   } = args;
 
   const characterIds: string[] =
@@ -177,6 +187,7 @@ async function buildRetryAgentContext(args: {
     activatedLorebookEntries: null,
     writableLorebookIds: null,
     chatSummary: ((chatMeta.summary as string) ?? "").trim() || null,
+    streaming,
     memory: {},
   };
 
@@ -228,7 +239,7 @@ async function resolveRetryAgents(args: {
     throw new Error("Cannot resolve provider URL");
   }
 
-  const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey);
+  const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey, conn.maxContext, conn.openrouterProvider);
   const resolvedAgents: ResolvedRetryAgent[] = [];
 
   for (const cfg of enabledConfigs) {
@@ -236,12 +247,23 @@ async function resolveRetryAgents(args: {
     let agentModel = conn.model;
 
     if (cfg.connectionId) {
-      const agentConn = await conns.getWithKey(cfg.connectionId as string);
-      if (agentConn) {
-        const agentBaseUrl = resolveBaseUrl(agentConn);
-        if (agentBaseUrl) {
-          agentProvider = createLLMProvider(agentConn.provider, agentBaseUrl, agentConn.apiKey);
-          agentModel = agentConn.model;
+      if (cfg.connectionId === LOCAL_SIDECAR_CONNECTION_ID) {
+        agentProvider = getLocalSidecarProvider();
+        agentModel = LOCAL_SIDECAR_MODEL;
+      } else {
+        const agentConn = await conns.getWithKey(cfg.connectionId as string);
+        if (agentConn) {
+          const agentBaseUrl = resolveBaseUrl(agentConn);
+          if (agentBaseUrl) {
+            agentProvider = createLLMProvider(
+              agentConn.provider,
+              agentBaseUrl,
+              agentConn.apiKey,
+              agentConn.maxContext,
+              agentConn.openrouterProvider,
+            );
+            agentModel = agentConn.model;
+          }
         }
       }
     }
@@ -369,6 +391,8 @@ async function applyRetryResultEffects(args: {
   const sortedResults = [...results].sort(
     (a, b) => (a.type === "game_state_update" ? 0 : 1) - (b.type === "game_state_update" ? 0 : 1),
   );
+  const chats = createChatsStorage(app.db);
+  const chatMeta = parseExtra(chat.metadata) as Record<string, unknown>;
 
   for (const result of sortedResults) {
     if (result.success && result.type === "game_state_update" && result.data && typeof result.data === "object") {
@@ -383,6 +407,16 @@ async function applyRetryResultEffects(args: {
         if (Object.keys(worldStatePatch).length > 0) {
           await gameStateStore.updateByMessage(retryMessageId, retrySwipeIndex, chatId, worldStatePatch as any);
         }
+
+        const existingGameMap = (chatMeta.gameMap as GameMap | null) ?? null;
+        const nextLocation = typeof worldStatePatch.location === "string" ? worldStatePatch.location : null;
+        const syncedGameMap = syncGameMapPartyPosition(existingGameMap, nextLocation);
+        if (syncedGameMap && syncedGameMap !== existingGameMap) {
+          chatMeta.gameMap = syncedGameMap;
+          await chats.updateMetadata(chatId, chatMeta);
+          sendSseEvent(reply, { type: "game_map_update", data: syncedGameMap });
+        }
+
         sendSseEvent(reply, { type: "game_state_patch", data: worldStatePatch });
       } catch {
         // Non-critical patching failure.
@@ -618,7 +652,8 @@ async function applyRetryResultEffects(args: {
               const imgModel = imgConnFull.model || "";
               const imgBaseUrl = imgConnFull.baseUrl || "https://image.pollinations.ai";
               const imgApiKey = imgConnFull.apiKey || "";
-              const imgServiceHint = imgConnFull.imageService || "";
+              const imgSource = (imgConnFull as any).imageGenerationSource || imgModel;
+              const imgServiceHint = imgConnFull.imageService || imgSource;
 
               const chatMeta = typeof chat.metadata === "string" ? JSON.parse(chat.metadata) : (chat.metadata ?? {});
               const selfieRes = (chatMeta.selfieResolution as string) ?? "";
@@ -785,90 +820,94 @@ export async function registerRetryAgentsRoute(app: FastifyInstance) {
   const gameStateStore = createGameStateStorage(app.db);
   const lorebooksStore = createLorebooksStorage(app.db);
 
-  app.post<{ Body: { chatId: string; agentTypes: string[] } }>("/retry-agents", async (request, reply) => {
-    const { chatId, agentTypes } = request.body;
-    if (!chatId || !agentTypes?.length) {
-      return reply.status(400).send({ error: "chatId and agentTypes are required" });
-    }
-
-    startSseReply(reply);
-
-    try {
-      const chat = await chats.getById(chatId);
-      if (!chat) {
-        throw new Error("Chat not found");
+  app.post<{ Body: { chatId: string; agentTypes: string[]; streaming?: boolean } }>(
+    "/retry-agents",
+    async (request, reply) => {
+      const { chatId, agentTypes, streaming = true } = request.body;
+      if (!chatId || !agentTypes?.length) {
+        return reply.status(400).send({ error: "chatId and agentTypes are required" });
       }
 
-      const chatMeta = parseExtra(chat.metadata);
-      const recentMessages = await chats.listMessages(chatId);
-      const lastAssistant = [...recentMessages].reverse().find((message: any) => message.role === "assistant");
-      const { enabledConfigs, resolvedAgents } = await resolveRetryAgents({
-        agentTypes,
-        chat,
-        conns,
-        agentsStore,
-      });
-      const agentContext = await buildRetryAgentContext({
-        chatId,
-        chat,
-        chatMeta,
-        recentMessages,
-        enabledConfigs,
-        lastAssistant,
-        chars,
-        gameStateStore,
-        lorebooksStore,
-      });
+      startSseReply(reply);
 
-      sendSseEvent(reply, { type: "agent_start", data: { phase: "retry" } });
-      const results = await executeRetryBatches(agentContext, resolvedAgents);
+      try {
+        const chat = await chats.getById(chatId);
+        if (!chat) {
+          throw new Error("Chat not found");
+        }
 
-      for (const result of results) {
-        const cfg = resolvedAgents.find((entry) => entry.resolved.type === result.agentType)?.cfg;
-        sendSseEvent(reply, {
-          type: "agent_result",
-          data: {
-            agentType: result.agentType,
-            agentName: cfg?.name ?? result.agentType,
-            resultType: result.type,
-            data: result.data,
-            success: result.success,
-            error: result.error,
-            durationMs: result.durationMs,
-          },
+        const chatMeta = parseExtra(chat.metadata);
+        const recentMessages = await chats.listMessages(chatId);
+        const lastAssistant = [...recentMessages].reverse().find((message: any) => message.role === "assistant");
+        const { enabledConfigs, resolvedAgents } = await resolveRetryAgents({
+          agentTypes,
+          chat,
+          conns,
+          agentsStore,
         });
+        const agentContext = await buildRetryAgentContext({
+          chatId,
+          chat,
+          chatMeta,
+          recentMessages,
+          enabledConfigs,
+          lastAssistant,
+          chars,
+          gameStateStore,
+          lorebooksStore,
+          streaming,
+        });
+
+        sendSseEvent(reply, { type: "agent_start", data: { phase: "retry" } });
+        const results = await executeRetryBatches(agentContext, resolvedAgents);
+
+        for (const result of results) {
+          const cfg = resolvedAgents.find((entry) => entry.resolved.type === result.agentType)?.cfg;
+          sendSseEvent(reply, {
+            type: "agent_result",
+            data: {
+              agentType: result.agentType,
+              agentName: cfg?.name ?? result.agentType,
+              resultType: result.type,
+              data: result.data,
+              success: result.success,
+              error: result.error,
+              durationMs: result.durationMs,
+            },
+          });
+        }
+
+        const retryMessageId = lastAssistant?.id ?? "";
+        const retrySwipeIndex = lastAssistant?.activeSwipeIndex ?? 0;
+        await persistRetryResults(agentsStore, chatId, retryMessageId, results);
+        await applyRetryResultEffects({
+          app,
+          reply,
+          chatId,
+          chat,
+          retryMessageId,
+          retrySwipeIndex,
+          results,
+          agentContext,
+          lorebooksStore,
+          gameStateStore,
+          conns,
+          chars,
+          resolvedAgents,
+        });
+
+        sendSseEvent(reply, { type: "done", data: "" });
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? (err as { cause?: unknown }).cause instanceof Error
+              ? `${err.message}: ${(err as { cause?: Error }).cause!.message}`
+              : err.message
+            : "Agent retry failed";
+        sendSseEvent(reply, { type: "error", data: message });
+      } finally {
+        reply.raw.end();
       }
-
-      const retryMessageId = lastAssistant?.id ?? "";
-      const retrySwipeIndex = lastAssistant?.activeSwipeIndex ?? 0;
-      await persistRetryResults(agentsStore, chatId, retryMessageId, results);
-      await applyRetryResultEffects({
-        app,
-        reply,
-        chatId,
-        chat,
-        retryMessageId,
-        retrySwipeIndex,
-        results,
-        agentContext,
-        lorebooksStore,
-        gameStateStore,
-        conns,
-        chars,
-        resolvedAgents,
-      });
-
-      sendSseEvent(reply, { type: "done", data: "" });
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? (err as { cause?: unknown }).cause instanceof Error
-            ? `${err.message}: ${(err as { cause?: Error }).cause!.message}`
-            : err.message
-          : "Agent retry failed";
-      sendSseEvent(reply, { type: "error", data: message });
-    } finally {
-      reply.raw.end();
-    }
-  });
+    },
+  );
 }

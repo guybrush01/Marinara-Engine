@@ -30,21 +30,39 @@ fi
 
 # ── Check pnpm ──
 PNPM_VERSION=$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).packageManager?.split('@')[1] || '10.30.3'")
+PNPM_USE_COREPACK=0
+
+run_pnpm() {
+    if [ "$PNPM_USE_COREPACK" = "1" ]; then
+        corepack pnpm "$@"
+    else
+        pnpm "$@"
+    fi
+}
 
 if command -v corepack &> /dev/null; then
     corepack enable >/dev/null 2>&1 || true
-fi
-
-CURRENT_PNPM_VERSION=$(pnpm -v 2>/dev/null || true)
-if [ -z "$CURRENT_PNPM_VERSION" ] || [ "$CURRENT_PNPM_VERSION" != "$PNPM_VERSION" ]; then
-    echo "  [..] Aligning pnpm to ${PNPM_VERSION}..."
-    if command -v corepack &> /dev/null; then
-        corepack prepare "pnpm@${PNPM_VERSION}" --activate >/dev/null
+    echo "  [..] Aligning pnpm to ${PNPM_VERSION} via Corepack..."
+    if corepack prepare "pnpm@${PNPM_VERSION}" --activate >/dev/null 2>&1; then
+        PNPM_USE_COREPACK=1
     else
+        echo "  [WARN] Corepack could not activate pnpm ${PNPM_VERSION} - falling back to npm..."
+        npm install -g "pnpm@${PNPM_VERSION}" >/dev/null
+    fi
+else
+    CURRENT_PNPM_VERSION=$(pnpm -v 2>/dev/null || true)
+    if [ -z "$CURRENT_PNPM_VERSION" ] || [ "$CURRENT_PNPM_VERSION" != "$PNPM_VERSION" ]; then
+        echo "  [..] Aligning pnpm to ${PNPM_VERSION}..."
         npm install -g "pnpm@${PNPM_VERSION}" >/dev/null
     fi
 fi
-echo "  [OK] pnpm ${PNPM_VERSION} ready"
+
+CURRENT_PNPM_VERSION=$(run_pnpm --version 2>/dev/null || true)
+if [ -z "$CURRENT_PNPM_VERSION" ] || [ "$CURRENT_PNPM_VERSION" != "$PNPM_VERSION" ]; then
+    echo "  [ERROR] Failed to make pnpm ${PNPM_VERSION} available."
+    exit 1
+fi
+echo "  [OK] pnpm ${CURRENT_PNPM_VERSION} ready"
 
 # ── Auto-update from Git ──
 if [ -d ".git" ]; then
@@ -71,7 +89,7 @@ if [ -d ".git" ]; then
             else
                 echo "  [OK] Updated to $(git log -1 --format='%h %s' 2>/dev/null)"
                 echo "  [..] Reinstalling dependencies..."
-                pnpm install
+                run_pnpm install
                 # Force rebuild
                 rm -rf packages/shared/dist packages/server/dist packages/client/dist
                 rm -f packages/shared/tsconfig.tsbuildinfo packages/server/tsconfig.tsbuildinfo packages/client/tsconfig.tsbuildinfo
@@ -94,14 +112,14 @@ if [ -f "packages/shared/dist/constants/defaults.js" ]; then
     if [ -n "$SOURCE_VER" ] && [ -n "$DIST_VER" ] && [ "$SOURCE_VER" != "$DIST_VER" ]; then
         echo "  [WARN] Version mismatch: source v$SOURCE_VER but dist has v$DIST_VER"
         echo "  [..] Forcing rebuild to apply update..."
-        pnpm install
+        run_pnpm install
         rm -rf packages/shared/dist packages/server/dist packages/client/dist
         rm -f packages/shared/tsconfig.tsbuildinfo packages/server/tsconfig.tsbuildinfo packages/client/tsconfig.tsbuildinfo
     fi
     if [ -n "$SOURCE_COMMIT" ] && [ "$SOURCE_COMMIT" != "$DIST_COMMIT" ]; then
         echo "  [WARN] Build commit mismatch: source $SOURCE_COMMIT but dist has ${DIST_COMMIT:-<missing>}"
         echo "  [..] Forcing rebuild to apply update..."
-        pnpm install
+        run_pnpm install
         rm -rf packages/shared/dist packages/server/dist packages/client/dist
         rm -f packages/shared/tsconfig.tsbuildinfo packages/server/tsconfig.tsbuildinfo packages/client/tsconfig.tsbuildinfo
     fi
@@ -113,21 +131,21 @@ if [ ! -d "node_modules" ]; then
     echo "  [..] Installing dependencies (first run)..."
     echo "       This may take a few minutes."
     echo ""
-    pnpm install
+    run_pnpm install
 fi
 
 # ── Build if needed ──
 if [ ! -d "packages/shared/dist" ]; then
     echo "  [..] Building shared types..."
-    pnpm build:shared
+    run_pnpm build:shared
 fi
 if [ ! -d "packages/server/dist" ]; then
     echo "  [..] Building server..."
-    pnpm build:server
+    run_pnpm build:server
 fi
 if [ ! -d "packages/client/dist" ]; then
     echo "  [..] Building client..."
-    pnpm build:client
+    run_pnpm build:client
 fi
 
 # Database migrations are handled automatically at server startup by runMigrations()

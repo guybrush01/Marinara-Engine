@@ -44,6 +44,7 @@ export function LorebookMakerModal({ open, onClose }: Props) {
   const { data: rawLorebooks } = useLorebooks();
   const createLorebook = useCreateLorebook();
   const openLorebookDetail = useUIStore((s) => s.openLorebookDetail);
+  const enableStreaming = useUIStore((s) => s.enableStreaming);
   const qc = useQueryClient();
 
   const [prompt, setPrompt] = useState("");
@@ -91,6 +92,7 @@ export function LorebookMakerModal({ open, onClose }: Props) {
         prompt,
         connectionId,
         entryCount,
+        streaming: enableStreaming,
       };
 
       // If targeting existing lorebook, pass the ID so server auto-saves entries
@@ -180,7 +182,7 @@ export function LorebookMakerModal({ open, onClose }: Props) {
       setBatchProgress(null);
       abortRef.current = null;
     }
-  }, [prompt, connectionId, entryCount, targetLorebookId, qc]);
+  }, [prompt, connectionId, entryCount, targetLorebookId, enableStreaming, qc]);
 
   const handleSaveAsNew = async () => {
     if (!generated) return;

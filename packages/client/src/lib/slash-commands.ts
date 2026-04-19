@@ -5,7 +5,7 @@ import { api } from "./api-client";
 import { useChatStore } from "../stores/chat.store";
 import { useUIStore } from "../stores/ui.store";
 import { toast } from "sonner";
-import type { SceneCreateResponse, ScenePlanResponse } from "@marinara-engine/shared";
+import { SUPPORTED_MACROS, type SceneCreateResponse, type ScenePlanResponse } from "@marinara-engine/shared";
 
 export interface SlashCommand {
   name: string;
@@ -89,6 +89,25 @@ function parseReminder(input: string): { ms: number; timeStr: string; message: s
 
   return { ms, timeStr: parts.join(""), message };
 }
+
+function buildMacroHelpText(): string {
+  const sections = new Map<string, string[]>();
+
+  for (const macro of SUPPORTED_MACROS) {
+    const lines = sections.get(macro.category) ?? [];
+    lines.push(`  ${macro.syntax} — ${macro.description}`);
+    sections.set(macro.category, lines);
+  }
+
+  return [
+    "Supported Macros:",
+    ...Array.from(sections.entries()).flatMap(([category, lines], index) =>
+      index === 0 ? [`${category}:`, ...lines] : ["", `${category}:`, ...lines],
+    ),
+  ].join("\n");
+}
+
+const MACRO_HELP_TEXT = buildMacroHelpText();
 
 // ── Command definitions ────────────────
 
@@ -324,6 +343,16 @@ const COMMANDS: SlashCommand[] = [
     async execute(_args, _ctx) {
       const lines = COMMANDS.map((c) => `${c.usage} — ${c.description}`);
       return { handled: true, feedback: `Available Commands:\n${lines.join("\n")}` };
+    },
+  },
+  {
+    name: "macros",
+    aliases: ["macro"],
+    description: "List supported prompt macros like {{user}} and {{char}}",
+    usage: "/macros",
+    local: true,
+    async execute() {
+      return { handled: true, feedback: MACRO_HELP_TEXT };
     },
   },
 ];

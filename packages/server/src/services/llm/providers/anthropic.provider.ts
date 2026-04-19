@@ -15,6 +15,12 @@ import {
  */
 export class AnthropicProvider extends BaseLLMProvider {
   async *chat(messages: ChatMessage[], options: ChatOptions): AsyncGenerator<string, LLMUsage | void, unknown> {
+    const configuredMaxTokens = options.maxTokens ?? 4096;
+    const contextFit = this.fitMessagesToContext(messages, { ...options, maxTokens: configuredMaxTokens });
+    messages = contextFit.messages;
+    this.logContextTrim(contextFit, options.model);
+    const maxTokens = contextFit.maxTokens ?? configuredMaxTokens;
+
     const url = `${this.baseUrl}/messages`;
 
     // Claude requires system prompt separate from messages — filter out empty-content messages
@@ -47,7 +53,7 @@ export class AnthropicProvider extends BaseLLMProvider {
 
     const body: Record<string, unknown> = {
       model: options.model,
-      max_tokens: options.maxTokens ?? 4096,
+      max_tokens: maxTokens,
       ...(systemField !== undefined && { system: systemField }),
       messages: mergedMessages.map((m, i) => {
         // Build content parts (text + optional images)
@@ -106,10 +112,10 @@ export class AnthropicProvider extends BaseLLMProvider {
           // Cannot use temperature with extended thinking
           delete body.temperature;
         } else {
-          const budgetTokens = Math.max(1024, Math.min(options.maxTokens ?? 4096, 16000));
+          const budgetTokens = Math.max(1024, Math.min(maxTokens, 16000));
           body.thinking = { type: "enabled", budget_tokens: budgetTokens };
           // Anthropic requires max_tokens to be > budget_tokens
-          body.max_tokens = (options.maxTokens ?? 4096) + budgetTokens;
+          body.max_tokens = maxTokens + budgetTokens;
           // Cannot use temperature with extended thinking
           delete body.temperature;
         }

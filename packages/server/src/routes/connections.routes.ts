@@ -2,9 +2,15 @@
 // Routes: Connections
 // ──────────────────────────────────────────────
 import type { FastifyInstance } from "fastify";
-import { createConnectionSchema } from "@marinara-engine/shared";
+import { createConnectionSchema, inferImageSource } from "@marinara-engine/shared";
 import { createConnectionsStorage } from "../services/storage/connections.storage.js";
 import { createLLMProvider } from "../services/llm/provider-registry.js";
+
+function resolveImageGenerationSource(conn: Record<string, unknown>, baseUrl: string): string {
+  const explicitSource = typeof conn.imageGenerationSource === "string" ? conn.imageGenerationSource : "";
+  const model = typeof conn.model === "string" ? conn.model : "";
+  return inferImageSource(explicitSource || model, baseUrl);
+}
 
 export async function connectionsRoutes(app: FastifyInstance) {
   const storage = createConnectionsStorage(app.db);
@@ -83,19 +89,17 @@ export async function connectionsRoutes(app: FastifyInstance) {
         headers[provider.apiKeyHeader] = conn.apiKey;
       }
 
-      const imageService  = conn.imageService;
+      const imageSource =
+        conn.provider === "image_generation" ? resolveImageGenerationSource(conn as any, baseUrl) : "";
       // image_generation has no standard modelsEndpoint — use provider-specific checks
       let testUrl: string;
-      if (conn.provider === "image_generation" && baseUrl.toLowerCase().includes("novelai.net")) {
+      if (conn.provider === "image_generation" && imageSource === "novelai") {
         // NovelAI: validate the API key via the user subscription endpoint
         testUrl = "https://api.novelai.net/user/subscription";
-      } else if (
-        conn.provider === "image_generation" &&
-        (imageService === "comfyui" || (!imageService && (baseUrl.includes(":8188") || (baseUrl.toLowerCase().includes("comfyui")))))
-      ) {
+      } else if (conn.provider === "image_generation" && imageSource === "comfyui") {
         // ComfyUI: ping the system stats endpoint
         testUrl = `${baseUrl}/system_stats`;
-      } else if (conn.provider === "image_generation" && (imageService === "automatic1111" || (!imageService && baseUrl.includes(":7860")))) {
+      } else if (conn.provider === "image_generation" && imageSource === "automatic1111") {
         // AUTOMATIC1111 / SD Web UI: ping the internal ping endpoint
         testUrl = `${baseUrl}/sdapi/v1/options`;
       } else {
@@ -154,6 +158,8 @@ export async function connectionsRoutes(app: FastifyInstance) {
       }
 
       // ── Special handling for local image gen services ──
+      const imageSource =
+        conn.provider === "image_generation" ? resolveImageGenerationSource(conn as any, baseUrl) : "";
       const lowerBase = baseUrl.toLowerCase();
       const sanitizeProviderBody = (body: string): string => {
         if (body.includes("<html") || body.includes("<!DOCTYPE")) {
@@ -161,10 +167,9 @@ export async function connectionsRoutes(app: FastifyInstance) {
         }
         return body.slice(0, 300);
       };
-      const imageService = conn.imageService;
 
       // ComfyUI: fetch checkpoints from object_info
-      if (conn.provider === "image_generation" && (imageService === "comfyui" || lowerBase.includes(":8188") || lowerBase.includes("comfyui"))) {
+      if (conn.provider === "image_generation" && imageSource === "comfyui") {
         const res = await fetch(`${baseUrl}/object_info/CheckpointLoaderSimple`);
         if (!res.ok) {
           return reply.status(502).send({ error: `ComfyUI returned ${res.status}` });
@@ -177,7 +182,7 @@ export async function connectionsRoutes(app: FastifyInstance) {
       }
 
       // AUTOMATIC1111 / SD Web UI: fetch models from /sdapi/v1/sd-models
-      if (conn.provider === "image_generation" && (imageService === "automatic1111" || (!imageService && lowerBase.includes(":7860")))) {
+      if (conn.provider === "image_generation" && imageSource === "automatic1111") {
         const res = await fetch(`${baseUrl}/sdapi/v1/sd-models`);
         if (!res.ok) {
           return reply.status(502).send({ error: `SD Web UI returned ${res.status}` });
@@ -263,7 +268,7 @@ export async function connectionsRoutes(app: FastifyInstance) {
 
     const start = Date.now();
     try {
-      const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey);
+      const provider = createLLMProvider(conn.provider, baseUrl, conn.apiKey, conn.maxContext, conn.openrouterProvider);
 
       let fullResponse = "";
       for await (const chunk of provider.chat([{ role: "user", content: "hi" }], {
