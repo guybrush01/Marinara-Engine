@@ -88,12 +88,12 @@ Detailed release notes now live in [CHANGELOG.md](CHANGELOG.md). Tagged releases
 
 ## Installation
 
-| Platform | Guide |
-| -------- | ----- |
-| 🐳 Docker / Podman | [Container Installation Guide](docs/installation/containers.md) — recommended |
-| 🪟 Windows | [Windows Installation Guide](docs/installation/windows.md) |
-| 🍎🐧 macOS / Linux | [macOS / Linux Installation Guide](docs/installation/macos-linux.md) |
-| 🤖 Android (Termux) | [Android (Termux) Installation Guide](docs/installation/android-termux.md) |
+| Platform            | Guide                                                                         |
+| ------------------- | ----------------------------------------------------------------------------- |
+| 🐳 Docker / Podman  | [Container Installation Guide](docs/installation/containers.md) — recommended |
+| 🪟 Windows          | [Windows Installation Guide](docs/installation/windows.md)                    |
+| 🍎🐧 macOS / Linux  | [macOS / Linux Installation Guide](docs/installation/macos-linux.md)          |
+| 🤖 Android (Termux) | [Android (Termux) Installation Guide](docs/installation/android-termux.md)    |
 
 Each guide covers installation and updating for that platform.
 
@@ -248,6 +248,7 @@ Copy `.env.example` to `.env` to customize:
 | `PORT`              | `7860`                                                   | Server port. Keep Android builds, launchers, Docker, and Termux on the same value.                                                                      |
 | `HOST`              | `127.0.0.1` (`pnpm start`) / `0.0.0.0` (shell launchers) | Bind address                                                                                                                                            |
 | `AUTO_OPEN_BROWSER` | `true`                                                   | Whether the shell launchers auto-open the local app URL. Set to `false`, `0`, `no`, or `off` to disable. Does not apply to the Android WebView wrapper. |
+| `TZ`                | _(system default; containers are often `UTC`)_           | Optional IANA timezone used for time-based features like character schedules.                                                                           |
 | `DATABASE_URL`      | `file:./data/marinara-engine.db`                         | SQLite database path. Relative file paths resolve from `packages/server` for compatibility with existing local installs.                                |
 | `ENCRYPTION_KEY`    | _(empty)_                                                | AES key for API key encryption (generate with `openssl rand -hex 32`)                                                                                   |
 | `ADMIN_SECRET`      | _(empty)_                                                | Optional shared secret for destructive admin endpoints such as `/api/admin/clear-all`                                                                   |
