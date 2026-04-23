@@ -1249,14 +1249,14 @@ function CharacterGalleryTab({ characterId, characterName }: { characterId: stri
 
   const handleUpload = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = e.target.files;
-      if (!files || files.length === 0) return;
-      for (const file of Array.from(files)) {
-        const formData = new FormData();
-        formData.append("file", file);
-        upload.mutate(formData);
-      }
-      e.target.value = "";
+      const input = e.currentTarget;
+      const files = Array.from(input.files ?? []);
+      if (files.length === 0) return;
+      upload.mutate(files, {
+        onSettled: () => {
+          input.value = "";
+        },
+      });
     },
     [upload],
   );

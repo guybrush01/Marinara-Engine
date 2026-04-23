@@ -34,8 +34,29 @@ export function useGalleryImages(chatId: string | undefined) {
 export function useUploadGalleryImage(chatId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (formData: FormData) => api.upload<ChatImage>(`/gallery/${chatId}/upload`, formData),
-    onSuccess: () => {
+    mutationFn: async (files: File[]) => {
+      const uploads = await Promise.allSettled(
+        files.map((file) => {
+          const formData = new FormData();
+          formData.append("file", file);
+          return api.upload<ChatImage>(`/gallery/${chatId}/upload`, formData);
+        }),
+      );
+
+      const successfulUploads = uploads.filter(
+        (result): result is PromiseFulfilledResult<ChatImage> => result.status === "fulfilled",
+      );
+
+      if (successfulUploads.length !== uploads.length) {
+        const failedCount = uploads.length - successfulUploads.length;
+        throw new Error(
+          failedCount === 1 ? "One gallery image failed to upload." : `${failedCount} gallery images failed to upload.`,
+        );
+      }
+
+      return successfulUploads.map((result) => result.value);
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: galleryKeys.chat(chatId) });
     },
   });

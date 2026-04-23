@@ -165,9 +165,31 @@ export function useCharacterGalleryImages(characterId: string | null) {
 export function useUploadCharacterGalleryImage(characterId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (formData: FormData) =>
-      api.upload<CharacterGalleryImage>(`/characters/${characterId}/gallery/upload`, formData),
-    onSuccess: () => {
+    mutationFn: async (files: File[]) => {
+      const uploads = await Promise.allSettled(
+        files.map((file) => {
+          const formData = new FormData();
+          formData.append("file", file);
+          return api.upload<CharacterGalleryImage>(`/characters/${characterId}/gallery/upload`, formData);
+        }),
+      );
+
+      const successfulUploads = uploads.filter(
+        (result): result is PromiseFulfilledResult<CharacterGalleryImage> => result.status === "fulfilled",
+      );
+
+      if (successfulUploads.length !== uploads.length) {
+        const failedCount = uploads.length - successfulUploads.length;
+        throw new Error(
+          failedCount === 1
+            ? "One character gallery image failed to upload."
+            : `${failedCount} character gallery images failed to upload.`,
+        );
+      }
+
+      return successfulUploads.map((result) => result.value);
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: characterKeys.gallery(characterId) });
     },
   });
