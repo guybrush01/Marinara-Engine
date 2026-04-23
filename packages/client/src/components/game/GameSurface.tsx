@@ -81,7 +81,7 @@ import type { PersonaInfo } from "../chat/chat-area.types";
 /** Typewriter component for the intro screen — reveals text character-by-character. */
 function IntroTypewriter({ text, onComplete }: { text: string; onComplete?: () => void }) {
   const [visible, setVisible] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const endRef = useRef<HTMLSpanElement>(null);
   const firedRef = useRef(false);
   useEffect(() => {
     if (visible >= text.length) {
@@ -94,15 +94,18 @@ function IntroTypewriter({ text, onComplete }: { text: string; onComplete?: () =
     const t = window.setTimeout(() => setVisible((v) => v + 1), 28);
     return () => window.clearTimeout(t);
   }, [visible, text.length, onComplete]);
-  // Auto-scroll to bottom as text is revealed
+  // Keep the reveal edge in view by scrolling the nearest scrollable ancestor.
+  // A nested overflow-y-auto here blocks Android touch-scroll from reaching the
+  // parent scroll container, so we don't create our own overflow on this div.
   useEffect(() => {
-    containerRef.current?.scrollTo({ top: containerRef.current.scrollHeight });
+    endRef.current?.scrollIntoView({ block: "end" });
   }, [visible]);
   return (
-    <div ref={containerRef} className="overflow-y-auto">
+    <div>
       <p className="text-sm leading-relaxed text-white/70 whitespace-pre-line">
         {text.slice(0, visible)}
         {visible < text.length && <span className="animate-pulse text-white/40">▌</span>}
+        <span ref={endRef} />
       </p>
     </div>
   );
