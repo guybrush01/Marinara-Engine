@@ -701,6 +701,18 @@ async function applyRetryResultEffects(args: {
       }
     }
 
+    // ── CYOA: persist choices onto message/swipe extra ──
+    if (result.success && result.type === "cyoa_choices" && result.data && typeof result.data === "object") {
+      const cyoaData = result.data as { choices?: Array<{ label: string; text: string }> };
+      if (cyoaData.choices && cyoaData.choices.length > 0) {
+        if (retrySwipeIndex === 0) {
+          await chats.updateMessageExtra(retryMessageId, { cyoaChoices: cyoaData.choices });
+        } else {
+          await chats.updateSwipeExtra(retryMessageId, retrySwipeIndex, { cyoaChoices: cyoaData.choices });
+        }
+      }
+    }
+
     // ── ILLUSTRATOR: generate image from agent prompt ──
     if (result.success && result.type === "image_prompt" && result.data && typeof result.data === "object") {
       try {
@@ -948,6 +960,14 @@ export async function registerRetryAgentsRoute(app: FastifyInstance) {
           lorebooksStore,
           streaming,
         });
+
+        // Inject previous CYOA choices for anti-repetition when rerolling CYOA
+        if (agentTypes.includes("cyoa") && lastAssistant) {
+          const lastExtra = parseExtra((lastAssistant as any).extra);
+          if (lastExtra?.cyoaChoices) {
+            agentContext.memory._lastCyoaChoices = lastExtra.cyoaChoices;
+          }
+        }
 
         sendSseEvent(reply, { type: "agent_start", data: { phase: "retry" } });
         const lorebookKeeperAgent = resolvedAgents.find((entry) => entry.resolved.type === "lorebook-keeper") ?? null;

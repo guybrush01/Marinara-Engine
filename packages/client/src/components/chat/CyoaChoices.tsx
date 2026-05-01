@@ -2,7 +2,7 @@
 // CYOA Choices — interactive choice buttons after assistant messages
 // ──────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Loader2, Pencil, Sparkles, X } from "lucide-react";
+import { Check, Loader2, Pencil, RefreshCw, Sparkles, X } from "lucide-react";
 import { useUpdateMessageExtra } from "../../hooks/use-chats";
 import { useAgentStore } from "../../stores/agent.store";
 import { useGenerate } from "../../hooks/use-generate";
@@ -31,12 +31,13 @@ export function CyoaChoices({ messages }: Props) {
   const choices = useAgentStore((s) => s.cyoaChoices);
   const setCyoaChoices = useAgentStore((s) => s.setCyoaChoices);
   const clearCyoaChoices = useAgentStore((s) => s.clearCyoaChoices);
-  const { generate } = useGenerate();
+  const { generate, retryAgents } = useGenerate();
   const activeChatId = useChatStore((s) => s.activeChatId);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const updateMessageExtra = useUpdateMessageExtra(activeChatId);
   const [isEditing, setIsEditing] = useState(false);
   const [draftChoices, setDraftChoices] = useState<CyoaChoice[]>([]);
+  const [isRerolling, setIsRerolling] = useState(false);
 
   // Hydrate CYOA choices from the last assistant message's extras on mount / chat switch
   const persistedChoiceState = useMemo(() => {
@@ -70,6 +71,17 @@ export function CyoaChoices({ messages }: Props) {
     },
     [activeChatId, isStreaming, isEditing, clearCyoaChoices, generate],
   );
+
+  const handleReroll = useCallback(async () => {
+    if (!activeChatId || isStreaming || isEditing || isRerolling) return;
+    clearCyoaChoices();
+    setIsRerolling(true);
+    try {
+      await retryAgents(activeChatId, ["cyoa"]);
+    } finally {
+      setIsRerolling(false);
+    }
+  }, [activeChatId, isStreaming, isEditing, isRerolling, clearCyoaChoices, retryAgents]);
 
   const handleStartEdit = useCallback(() => {
     setDraftChoices(choices.map((choice) => ({ ...choice })));
@@ -114,8 +126,18 @@ export function CyoaChoices({ messages }: Props) {
         </div>
         <button
           type="button"
+          onClick={handleReroll}
+          disabled={isStreaming || isRerolling || isEditing}
+          className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--muted)]/20 px-2 py-1 text-[0.5625rem] text-[var(--foreground)]/60 transition-all hover:border-[var(--border)] hover:bg-[var(--muted)]/40 hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-black/35 dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white/80"
+          title="Re-roll CYOA choices"
+        >
+          <RefreshCw size="0.625rem" className={isRerolling ? "animate-spin" : ""} />
+          <span>{isRerolling ? "Rerolling" : "Re-roll"}</span>
+        </button>
+        <button
+          type="button"
           onClick={isEditing ? handleCancelEdit : handleStartEdit}
-          disabled={isStreaming || updateMessageExtra.isPending}
+          disabled={isStreaming || isRerolling || updateMessageExtra.isPending}
           className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--muted)]/20 px-2 py-1 text-[0.5625rem] text-[var(--foreground)]/60 transition-all hover:border-[var(--border)] hover:bg-[var(--muted)]/40 hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-black/35 dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white/80"
           title={isEditing ? "Cancel editing choices" : "Edit CYOA choices"}
         >
